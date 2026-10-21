@@ -1,0 +1,30 @@
+.task-materials { display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%; }
+.material-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.material-heading, .material-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.material-heading .form-label { margin: 0; }
+.material-heading small { font-size: 11px; color: var(--text-muted); }
+.material-actions { font-size: 12px; }
+.material-actions .btn-icon-only, .material-error .btn-icon-only { width: 26px; height: 26px; min-width: 26px; padding: 0; flex-shrink: 0; }
+.material-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; min-width: 0; border-bottom: 1px solid var(--border-color); }
+.material-info { flex: 1; min-width: 0; }
+.material-name, .material-progress { font-size: 12px; overflow-wrap: anywhere; }
+.material-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.material-meta code { font-size: 11px; overflow-wrap: anywhere; cursor: help; }
+.material-integrity.verified { color: #147c57; }
+.material-integrity.changed, .material-integrity.missing, .material-integrity.unsafe { color: #b73542; }
+.material-empty { padding: 6px 0; color: var(--text-muted); font-size: 12px; }
+.material-error { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.material-error > svg { flex-shrink: 0; }
+.material-error > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.task-input-picker { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; }
+.material-help { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+.material-input-icon { display: flex; color: var(--text-muted); flex-shrink: 0; }
+.material-input-status.imported { color: #147c57; }
+.material-input-status.failed, .material-input-status.missing, .material-item-error { color: #b73542; }
+.material-input-status.uploading { color: var(--text-primary); }
+.material-item-error { margin: 4px 0 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.material-reselect-note { padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; }
+@media (max-width: 480px) {
+  .material-row { flex-wrap: wrap; }
+  .material-row > .material-actions { margin-left: auto; }
+}

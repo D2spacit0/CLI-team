@@ -1,0 +1,78 @@
+/* CLI Team Workbench Design Tokens (2026-10-13 视觉美化版) */
+:root {
+  --wb-background: #F3F6FA;
+  --wb-surface: #FFFFFF;
+  --wb-surface-subtle: #F8FAFF;
+  --wb-surface-hover: #F0F4FA;
+  --wb-surface-active: #E8EEF8;
+  --wb-text: #172B4D;
+  --wb-text-secondary: #3D4E68;
+  --wb-muted: #53657D;
+  --wb-border: #DCE4EE;
+  --wb-border-subtle: #E8EEF5;
+  --wb-border-focus: #2862D7;
+
+  --wb-accent: #2862D7;
+  --wb-accent-hover: #204FAB;
+  --wb-accent-active: #183C85;
+  --wb-accent-subtle: #EDF3FF;
+  --wb-accent-border: #B3CAFA;
+
+  /* 状态颜色：成功、等待、失败 */
+  --wb-success: #1B7A55;
+  --wb-success-hover: #156244;
+  --wb-success-bg: #EDF7F1;
+  --wb-success-border: #BCE2CC;
+
+  --wb-warning: #9B6500;
+  --wb-warning-hover: #7E5200;
+  --wb-warning-bg: #FFF8EA;
+  --wb-warning-border: #F7E0AD;
+
+  --wb-danger: #BF3D3D;
+  --wb-danger-hover: #A13232;
+  --wb-danger-bg: #FFF4F3;
+  --wb-danger-border: #F8CBC9;
+
+  /* 字体系统 */
+  --wb-font-sans: "Microsoft YaHei UI", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --wb-font-mono: "Cascadia Code", Consolas, "Courier New", monospace;
+  --wb-line-height-normal: 1.65;
+
+  /* 间距与圆角 */
+  --wb-radius-xs: 4px;
+  --wb-radius-sm: 6px;
+  --wb-radius-md: 8px;
+  --wb-radius-lg: 12px;
+  --wb-radius-pill: 9999px;
+
+  /* 阴影系统：微层次、悬浮、抽屉 */
+  --wb-shadow-xs: 0 1px 2px rgba(23, 43, 77, 0.04);
+  --wb-shadow-card: 0 1px 3px rgba(23, 43, 77, 0.05), 0 1px 2px rgba(23, 43, 77, 0.03);
+  --wb-shadow-card-hover: 0 4px 12px rgba(23, 43, 77, 0.08), 0 1px 3px rgba(23, 43, 77, 0.04);
+  --wb-shadow-drawer: -6px 0 24px rgba(23, 43, 77, 0.10);
+  --wb-shadow-popover: 0 4px 16px rgba(23, 43, 77, 0.10);
+  --wb-shadow-focus: 0 0 0 3px rgba(40, 98, 215, 0.16);
+
+  /* 动效过渡 */
+  --wb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --wb-transition-fast: 120ms var(--wb-ease-out);
+  --wb-transition-normal: 180ms var(--wb-ease-out);
+}
+
+/* 全局滚动条优雅定制 */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.22);
+  border-radius: var(--wb-radius-pill);
+  transition: background var(--wb-transition-fast);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.40);
+}

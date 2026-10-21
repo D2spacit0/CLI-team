@@ -1,0 +1,12 @@
+.action-confirm-overlay { z-index: 200; }
+.action-confirm-message { display: flex; align-items: flex-start; gap: 12px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.action-confirm-message svg { flex-shrink: 0; color: var(--danger); }
+.task-operation-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 16px 0; padding: 9px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-surface-subtle); font-size: 12px; line-height: 1.5; flex-shrink: 0; max-height: 160px; overflow: auto; }
+.task-operation-feedback > span { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+.task-operation-feedback > svg { flex-shrink: 0; }
+.task-operation-feedback[data-tone="error"] { color: var(--danger); }
+.task-operation-feedback[data-tone="success"] { color: var(--success); }
+.task-operation-feedback[data-tone="warning"] { color: var(--warning); }
+.task-assignment > button + button { margin-inline-start: 8px; }
+.task-assignment-reminder { display: flex; align-items: center; gap: 8px; flex-basis: 100%; flex-wrap: wrap; color: var(--text-secondary); font-size: 12px; }
+.task-acceptance-record p { white-space: pre-wrap; overflow-wrap: anywhere; }
