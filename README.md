@@ -1,30 +1,166 @@
-# CLI Team
+<p align="center">
+  <a href="https://github.com/D2spacit0/CLI-team/releases/latest">
+    <img src="docs/assets/banner.webp" alt="CLI Team - 把多个 CLI 组织成一支可验收的团队" width="100%">
+  </a>
+</p>
 
-Windows 桌面多 CLI 团队工作台。双击程序进入独立窗口，负责人调度成员、执行任务并交叉评审，验收证据保留在本地。产品入口仅为桌面程序。
+<p align="center">
+  <strong>Windows 中文桌面工作台</strong> · 多 CLI 协作 · 依赖编排 · 独立评审 · 本地交付证据
+</p>
 
-## 使用桌面程序
+<p align="center">
+  <a href="https://github.com/D2spacit0/CLI-team/releases/latest"><img alt="下载 Windows 版" src="https://img.shields.io/badge/下载-Windows_x64-2563eb?style=for-the-badge&logo=windows11&logoColor=white"></a>
+  <a href="#快速开始"><img alt="快速开始" src="https://img.shields.io/badge/快速开始-2_分钟-0f766e?style=for-the-badge"></a>
+  <img alt="版本 v0.1.0" src="https://img.shields.io/badge/版本-v0.1.0-334155?style=for-the-badge">
+  <img alt="数据保存在本地" src="https://img.shields.io/badge/数据-保存在本地-7c3aed?style=for-the-badge">
+</p>
 
-双击项目根目录的 `CLI Team 桌面端.lnk` 打开最新桌面包；每次成功打包都会同步更新这个入口。也可以在 `release` 下打开完整打包目录，双击 `CLI Team.exe`，最新构建位置记录在 `release/latest-desktop.json`。程序已包含 Electron 和 Node.js 24+，不需要另装 Node.js，也不会打开外部浏览器。请保留整个程序目录，不能只复制 exe。
+> 用一个目标调动多个官方 CLI。主控负责拆解、派工、返工与终审，工作台负责依赖编排、机器检查和证据留存。
 
-本项目旁生成的桌面包会识别并使用原项目工作目录，保留 `.team` 中的成员、任务和日志以及 `workspaces` 中的文件。复制到其他位置后，默认在程序旁的 `workspace` 存放数据；可在设置中选择已有目录。程序文件和任务数据不混入分发包。
+## 一张图看懂
 
-窗口关闭时停止本地服务；仍有任务时会提示确认。切换目录仅允许在当前任务停止后执行，失败会恢复原目录。已运行的旧服务不会被强制接管；需要先关闭它。
+<p align="center">
+  <img src="docs/assets/workbench.webp" alt="CLI Team 主工作台：聊天协作、任务看板和运行状态" width="100%">
+</p>
 
-桌面内部服务只绑定 `127.0.0.1` 的动态端口，并要求桌面令牌或本地主控凭据。普通浏览器不能打开工作台，令牌不进入页面脚本、URL 或服务描述文件。CLI/MCP 仍可读取选定工作目录的本地主控凭据；使用不同目录时设置 `CLI_TEAM_WORKSPACE`。
+## 你可以用它做什么
 
-## 只提交目标，由主控完成交付
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>把目标交给团队</h3>
+      <p>选择一个主控和 1–4 名成员，描述目标后由主控拆解依赖、派发任务、回收结果并处理返工。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>在同一个房间协作</h3>
+      <p>支持 <code>@成员</code>、多人讨论、求助、改派和会话续接。每个成员保留自己的原生 CLI 会话。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>凭证据交付</h3>
+      <p>绑定文件与哈希，运行显式检查，再交给独立评审。模型说“完成了”不能替代机器验收。</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h3>失败后接着做</h3>
+      <p>草稿、材料、分工和验收意见自动保存。暂停、重启或断线后可以恢复有效步骤，不盲目重放旧任务。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>数据留在本机</h3>
+      <p>本地回环服务、SQLite 状态和任务目录。工作台不复制官方 CLI 的登录凭据，也不把任务数据混入发行包。</p>
+    </td>
+    <td width="33%" valign="top">
+      <h3>从桌面或 CLI 操作</h3>
+      <p>既能在独立窗口里工作，也能通过项目 CLI、MCP 和 skill 接入自己的主控流程。</p>
+    </td>
+  </tr>
+</table>
 
-在“工作区设置 → 主控与协作团队”配置一次主控 CLI、1–4 名可调度成员、可选的独立评审者和自动检查程序。主控可以是任一已启用、具有编辑权限的 CLI 成员，规划和审查时由服务强制使用只读模式。更改团队设置只影响后续目标，已有任务保留自己的分工与检查配置。
+## 交付不是一句话
 
-之后点击顶栏“交给主控”或任务看板的“提交目标”，填写要完成的工作即可。主控拆解出带依赖和交付约定的步骤，服务按授权名单依次派发。每个成员提交后先检查实际文件或分析结构，再交回主控核对内容；不满足要求时定向返工，保留其他仍有效的步骤。成员需要协助时，沿用负责人答复和咨询流程。
+<p align="center">
+  <img src="docs/assets/managed-delivery.webp" alt="主控任务详情：派工、返工、机器检查、独立评审和最终交付" width="100%">
+</p>
 
-全部步骤通过后，主控集成成果，服务运行预先配置的检查和独立评审，最后由主控对照原目标终审。自动交付要求机器证据有效且无跳过、产物版本未变、配置的独立评审通过，以及主控终审通过；满足后任务显示“主控已交付”，附成果、检查结果和终审日志。关闭自动交付时保留人工接受；未配置检查或缺少完整证据时也保持待验收，失败或版本失效则返工或阻塞。返工共用工作区设置中的次数上限。
+```text
+提交目标 → 主控拆解 → 成员执行 → 步骤审查
+                              ↓
+       交付 ← 主控终审 ← 独立评审 ← 机器检查
+                              ↘
+                          定向返工
+```
 
-目标草稿自动保存。关闭、稍后继续和进入团队配置前会等待保存，失败时保留输入并提供重试；底部始终显示保存状态。配置成员后可返回团队设置，再回到原频道的目标继续填写。中文输入法取消选字不会关闭窗口。
+任务只有在机器证据有效、产物版本未变化、独立评审和主控终审都通过时才自动交付。没有配置检查或缺少完整证据时，任务会停在待验收，交给用户确认。
 
-提交超时或回执丢失时使用“重试同一请求”找回原任务，不重复创建或重启；团队配置改变后仍能核对原请求。已收到创建回执的任务可以立即查看，草稿清理失败可在任务详情单独重试。暂停、取消和重启不会让旧审查结论推进流程；重启后明确继续，只有文件检查和主控审查都仍有效的步骤才可复用。
+## 快速开始
 
-CLI 入口也可以先配置团队，再提交目标（将示例成员 ID 换成实际 ID；`node --test` 仅适用于已约定 Node 测试的任务）：
+1. 从 [Releases](https://github.com/D2spacit0/CLI-team/releases/latest) 下载 `CLI-Team-v0.1.0-win32-x64-release.zip`。
+2. 解压并保留整个 `CLI Team-win32-x64` 目录。
+3. 运行 `CLI Team.exe`，在“工作区设置 → 主控与协作团队”中配置主控、成员和检查程序。
+4. 安装并登录准备使用的官方 CLI，然后点击“交给主控”提交第一个目标。
+
+桌面包已包含 Electron 和 Node.js 24，不需要另外安装 Node.js。程序目前未签名，Windows 可能显示 SmartScreen 提示。
+
+<details>
+<summary><strong>从源码运行与打包</strong></summary>
+
+环境要求：Node.js 24+、Windows（用于桌面打包和桌面回归）。
+
+```powershell
+git clone https://github.com/D2spacit0/CLI-team.git
+Set-Location CLI-team
+npm ci
+npm run build
+npm start
+```
+
+生成 Windows 桌面程序：
+
+```powershell
+npm run dist:desktop
+```
+
+打包采用明确文件清单，不包含 `.team/`、`workspaces/`、`work/`、数据库、日志或官方 CLI 凭据。请保留完整程序目录，不能只移动 exe。
+
+</details>
+
+<details>
+<summary><strong>支持哪些 CLI</strong></summary>
+
+成员页面支持 Antigravity、DSH ACP、Claude Code、Gemini CLI、Codex CLI、OpenCode 和自定义适配器。
+
+| 能力 | 说明 |
+| --- | --- |
+| 接入检测 | 只表示找到可执行入口，不代表已登录或真实模型调用成功 |
+| 会话 | 同一成员可按房间续接自己的原生会话 |
+| 模型 | 默认跟随官方客户端；也可在工作台明确选择 |
+| 凭据 | 由官方客户端管理，工作台不复制登录 token |
+| 自定义成员 | stdin 或 `{prompt}`、`{workspace}` 参数，返回约定 JSON |
+
+DSH 还支持按房间续接、模型选择、取消执行，以及只读查看本机外部会话。只读挂载不会接管或重写原桌面会话。
+
+</details>
+
+<details>
+<summary><strong>任务、材料与恢复</strong></summary>
+
+**准备任务**
+
+- 选择负责人、1–4 名成员和可选的独立评审者。
+- 填写目标、完成标准、交付文件和可选材料。
+- 可保存为待办；材料全部导入并核对后，再明确开始。
+- 单文件最多 8 MiB，每任务最多 64 份、合计 32 MiB。
+
+**执行与求助**
+
+- 主控生成带依赖关系的步骤计划，服务校验成员权限和依赖后依次派发。
+- 文件步骤可以约定相对路径与 `any`、`text` 或 `json` 格式。
+- 分析步骤可以要求固定章节；缺文件、空文件、格式或章节不符都不能通过。
+- 成员遇到具体问题时可以求助；负责人可只读答复，必要时咨询一名获授权成员。
+
+**暂停、改派与恢复**
+
+```powershell
+node tools/team.mjs pause TASK_ID --note "调整分工后继续"
+node tools/team.mjs progress TASK_ID
+node tools/team.mjs assign TASK_ID --assignee OWNER_ID --members WORKER_A,WORKER_B --reviewer REVIEWER_ID
+node tools/team.mjs start TASK_ID
+```
+
+暂停会等待成员进程和验收真正停止。改派保留文件、材料锁、历史记录和已用返工额度；只有用户明确继续后才重新规划。
+
+**自动保存**
+
+- 目标草稿、求助答复、返工意见和验收备注按任务与上下文保存。
+- 断线或刷新后可以恢复，不会把草稿恢复成执行权限。
+- 重试已送达的请求会找回原任务，不重复派工或通知。
+
+</details>
+
+<details>
+<summary><strong>CLI 与 MCP 接入</strong></summary>
+
+配置团队并提交目标：
 
 ```powershell
 node tools/team.mjs configure-team --assignee OWNER_ID --members WORKER_A,WORKER_B --reviewer REVIEWER_ID --checks '["node","--test"]'
@@ -33,201 +169,7 @@ node tools/team.mjs submit --request-id $goalRequestId --objective "实现任务
 node tools/team.mjs progress TASK_ID
 ```
 
-重试复用同一个 `$goalRequestId` 和同样的目标、标题、房间；不同目标使用新 ID。`configure-team --manual-delivery` 保留最后人工接受。MCP 对应 `team_configure_controller` 和 `team_submit_objective`。
-
-托管任务仍使用项目内的独立任务目录；需要复制现有材料或手工指定团队时，继续使用下面的任务准备入口。当前功能不会接管正在运行的外部 CLI 会话。实现及验证范围见[主控托管交付记录](docs/validation/2026-10-12-managed-supervision.md)。
-
-## 准备任务与保留草稿
-
-从看板选择“新建负责人协作任务”或“新建单人任务”，先填写目标、团队、完成标准和可选的输入材料，再决定保存待办或开始。小窗口内可滚动弹窗正文，标题和底部操作按钮保持可见。
-
-团队选择会显示成员的擅长技能和不可用原因；缺失执行入口、停用或权限不适合的成员不能提交为相应角色。忙碌成员仍可选择，界面会说明需要排队。需要补配成员时可进入成员管理，再点击“返回继续填写任务”。完成标准可以直接填写文字；自动检查使用“检查程序 + 每行一个参数”，JSON 数组放在高级配置中。选择人工核对不会产生自动检查通过的证据。
-
-| 操作 | 实际结果 |
-| --- | --- |
-| 稍后继续、关闭新建弹窗或按 Escape | 保存填写草稿，之后回到同一工作区继续准备 |
-| 保存待办 | 创建未启动任务并导入所选材料；不会启动成员 |
-| 单份材料的重试 | 核对并重试该材料；不会启动任务 |
-| 准备完成并开始 | 先确认全部所选材料已导入且核对通过，再启动任务 |
-
-部分材料导入失败时，已经创建的待办和已导入文件会保留；重试继续使用原任务。创建结果因连接问题未返回时，也会先恢复同一次创建的待办，避免重复建任务。首次启动后材料固定。放弃填写草稿会清除填写记录，已经创建的待办和材料副本仍保留。
-
-新任务准备信息、求助答复、返工意见与验收备注自动保存在本工作区，界面分别提示恢复、保存和失败状态。显示保存成功后，重开同一工作区可以继续填写；保存失败时文字留在当前窗口，可重试。退出或切换目录前会保存草稿并暂时锁住输入，取消离开后恢复编辑。本地服务意外停止时保留当前窗口，方便复制未保存内容。答复与任务、计划和问题关联，返工与验收文字也按对应上下文区分，不会自动提交到另一项任务或新计划。验收备注会保存，接受缺失自动检查等授权勾选不会保存，返回验收时需重新确认。
-
-调整分工时，成员选择和改派原因也会按任务、执行轮次保留。查看日志、切换任务或刷新后可以继续填写；先保存分工或选择“恢复当前分工”，再启动任务，避免仍按旧成员执行。保存分工不会自动启动。
-
-启动、验收和返工在当前任务内显示结果，失败时保留输入并提供重试。回执丢失后先核对实际状态，不会自动重复提交；无法核对时需先刷新任务状态。验收完成后可继续查看文件和已记录的验收意见；草稿清理失败也有单独的重试入口，不重复验收。取消确认保留底下的任务或日志页面，返回、Escape 和关闭按钮行为一致，处理中锁定关闭操作。
-
-聊天室发送前也会保存请求编号。连接中断或刷新后可点击“核对并重试”找回已送达的消息，避免重复派工和通知；重试前修改过的内容会继续留在草稿中。恢复草稿不会恢复执行权限开关，也不会自动发送。
-
-聊天记录默认读取最近 100 条，可在顶部“加载更早消息”。翻页保留正在阅读的正文位置，更新消息时保留已经展开的历史；断线后按页补齐新记录。阅读历史时可点击“回到最新”，更早的记录和恢复归档的旧消息不会计入新消息提示。历史加载和刷新失败均保留已读内容，提供各自的重试入口。本次窗口内切换房间会保留近期房间的已加载记录与阅读位置；重新打开应用从最近记录开始。较矮的窗口会压缩任务摘要，完整计划可从摘要入口查看。
-
-尚未导入的文件只在当前窗口中保留。重开应用后，需要重新选择这些文件；已导入文件从原待办核对，核对前显示“已保存，待核对”。查看任务日志或成果预览后，返回同一任务且计划和成果版本未变化时，会恢复原滚动位置及原输入框的光标或选中范围；该位置恢复用于本次窗口内的往返。
-
-## 开发与打包
-
-源码开发需要 Node.js 24 或更新版本。
-
-```powershell
-Set-Location <仓库目录>
-npm install
-npm run build
-npm start
-```
-
-源码目录的 `Start-Workbench.cmd` 与 `npm start` 都打开桌面窗口；旧 `server/index.mjs` 不再启动浏览器服务。`npm run dev` 先构建界面再打开桌面程序。
-
-运行 `npm run dist:desktop` 生成 Windows 程序目录，并更新项目根目录的桌面快捷方式；旧快捷方式备份与核验记录保存在 `work/desktop-shortcuts/`，自定义的启动参数和工作目录会保留。打包采用明确文件清单，不携带 `.team`、工作文件或测试数据；只使用常规运行权限，没有自动更新、开机自启或关闭安全防护的逻辑。
-
-检查命令：`npm test`、`npm run check`、`npm run build`；`npm run smoke:desktop` 验证开发版真实窗口加载、桥接与退出，打包后使用 `npm run smoke:desktop -- --packaged` 验证成品。加 `--coordination-smoke` 可在独立测试目录中点击验证排队、暂停、改派、继续与日志返回；此检查保持全局调度暂停，不启动模型。
-
-`npm run smoke:desktop -- --usability-smoke` 检查本轮任务准备、草稿和界面往返流程；成品检查加 `--packaged`，每个场景单独运行。此场景使用固定协议执行器，检查桌面操作与调度边界，不能代表真实模型的协作质量。最新实现与验证状态见[桌面体验第一批交付记录](docs/validation/2026-10-09-desktop-usability.md)。
-
-`npm run smoke:desktop -- --managed-smoke` 检查一次配置团队、目标草稿恢复、丢失回执后的请求去重，以及主控审查、返工和自动交付；`--workbench-smoke` 检查聊天、频道路由和侧栏。它们使用独立测试目录，托管场景运行固定 Node 协议程序，真实模型调用为 0。
-
-`npm run smoke:desktop -- --managed-request-smoke` 检查目标草稿读取和保存失败、设置往返、输入法 Escape、提交超时与去重、清理恢复及小窗口操作。此场景全程暂停调度，实际 CLI 启动数和真实模型调用数均为 0。实现与证据见[主控目标操作优化记录](docs/validation/2026-10-15-managed-request-ux.md)。
-
-Gemini 前端与主控托管已共同打包。10 月 13 日下午的视觉更新、最新程序和成品回归见 [前端视觉更新记录](docs/validation/2026-10-13-frontend-visual-refresh.md)，上午的接入验证保留在 [前端接入记录](docs/validation/2026-10-13-gemini-frontend-integration.md)。
-
-根目录快捷方式随打包同步更新，旧版入口的修复与成品核验见 [2026-10-13 桌面入口记录](docs/validation/2026-10-13-desktop-entry.md)。
-
-## 已实现
-
-- 团队讨论室、成员选择、`@handle` 路由、成员直接转交消息。
-- 任务看板、任务专属工作目录、显式验收命令、独立评审、有限轮返工。
-- 两轮多人讨论：独立立场、交叉质疑，最后由一名成员生成裁决摘要。
-- 持久化 SQLite 状态、实时 SSE 更新、暂停队列、取消执行、重启恢复。
-- 文件清单与 SHA-256 版本绑定、验收门、缺失验收显式确认、产物下载。
-- 桌面界面、CLI、MCP 材料导入，首次启动后锁定，执行前后检查输入哈希，输入不计为交付物。
-- 本地主控 CLI、MCP stdio 服务和项目内 skill。
-- 一次配置主控团队、单目标提交、逐步主控审查、定向返工、整体终审与基于有效证据的自动交付。
-
-首次运行会检测 Antigravity，创建执行者和评审者两个独立会话成员。检测到 Codex CLI 时保留一个默认停用的成员，不自动消耗额外 Codex 额度。
-
-## 负责人调度与技能描述
-
-在成员设置中填写“擅长技能”（最多 2000 字符），说明适合承担的工作与能力边界，例如“熟悉 SQLite 查询与迁移，可分析锁冲突；不负责前端视觉设计”。描述会保存到该成员，并进入负责人规划上下文，帮助负责人从你选定的成员池中选人；它不会安装工具、提升权限或证明能力已经验证。任务看板提供“新建负责人协作任务”和“新建单人任务”两个入口；协作入口需要明确选择负责人、成员池和可选的独立评审者。
-
-创建任务时选择负责人、负责人调度模式和允许参与的成员。负责人生成带依赖关系的子任务计划，服务校验后依次派发，最后交回负责人集成，再进行机器验收和独立评审。成员共享该任务的工作目录，当前采用串行执行以避免同时写入冲突。
-
-依赖交接按当前计划绑定的运行记录传递完整协议范围内的分析摘要和发现；负责人汇总收到本轮全部成员结果，不再依赖聊天记录中的截短摘要。成员结果仍是待核查的自述，不能替代文件检查和机器验收。
-
-步骤可声明交付契约：文件步骤指定相对路径与 `any`、`text` 或 `json` 格式；分析步骤指定报告必须包含的章节。服务在步骤完成后检查实际文件或报告结构，并记录哈希。空文件、缺失章节或不合约定的格式不能获得通过回执。文件存在、格式合法、分析章节齐全只证明结构满足约定，内容是否正确仍需核查，最终机器验收、独立评审和人工接受照常进行。未配置契约的旧步骤会明确显示“未配置”，不能当作检查通过。
-
-成员执行中可以提交具体求助问题，负责人会以只读方式答复；必要时，负责人可向已选成员池中的另一名协作者咨询一次，再整理答复交回原步骤。请求者、负责人本人及独立评审者不能被选作该次咨询对象。同一步骤最多求助 2 次，每项任务最多 6 次，超过上限或缺少外部信息时等待处理。
-
-需要补充信息时，先在任务详情或 `progress TASK_ID` 中查看协作问题及其 `helpId`。任务与进程停稳后，可以保存答复；保存不会启动成员、修改验收结论或清除历史。之后明确点击“继续任务”或运行 `start TASK_ID`，答复才进入后续执行上下文。通过 MCP 使用 `team_answer_assistance`，同样需要另行 `team_decide action:"start"`。
-
-具有完整交付契约的计划支持局部恢复：继续时重新核对步骤输入、成员执行配置、依赖运行记录和交付哈希，保留仍有效的完成步骤，仅重做未完成或已失效的步骤及其下游。`progress` 的 `resume` 会返回可恢复状态、可复用步骤数及原因。改派或填写新的返工反馈后由负责人重新规划；缺少交付契约的旧计划继续时也会重新规划，已有文件与历史仍保留。
-
-运行中的任务、讨论会及排队执行会锁定相关成员的执行配置，名称和技能描述仍可更新。阻塞任务可填写反馈后继续；重新开始会清理该任务的旧待处理通知。取消后的等待接口会等到进程退出，成功执行后的等待也会覆盖验收和后继派发。
-
-需要中途换人时，在任务详情点击“暂停任务”。界面会等待成员进程与验收真正停止，再开放“调整分工”：可更换负责人、1–4 名协作者及独立评审者，并填写改派原因。保存后保持暂停，点击“继续任务”才重新规划；原有文件、材料锁、历史记录和已用返工额度保留。新负责人会收到改派说明及上一轮已记录的成员结果，失败或中断结果会明确标注。曾以编辑权限执行该任务的成员不能改为独立评审者。
-
-任务详情显示本任务的执行阶段、依赖关系、剩余返工次数和队列等待原因，区分全局暂停、成员忙碌、目录占用与并发已满。本任务历史不再受首页最近 50 条作业限制；详情默认保留最近 100 条及当前计划引用的作业，并明确说明省略数量。作业日志在排队和执行时每 2 秒刷新，可直接“返回任务”；加载失败时保留已读日志并支持重试。
-
-```powershell
-node tools/team.mjs pause TASK_ID --note "调整分工后继续"
-node tools/team.mjs progress TASK_ID
-node tools/team.mjs assign TASK_ID --assignee OWNER_ID --members WORKER_A,WORKER_B --reviewer REVIEWER_ID --note "改由熟悉此模块的成员处理"
-node tools/team.mjs start TASK_ID
-```
-
-保存协作答复并明确恢复：
-
-```powershell
-node tools/team.mjs progress TASK_ID
-node tools/team.mjs answer TASK_ID --help-id HELP_ID --answer "已确认输出字段使用 status，取值为 ready 或 blocked。"
-node tools/team.mjs progress TASK_ID
-node tools/team.mjs start TASK_ID
-```
-
-外部接单上限为 50 项；已接收流程的评审、返工和讨论后续阶段可以交接执行，不会因外部队列已满而中断。
-
-负责人规划或汇总发生可重试的执行失败时，会消耗同一份返工额度重试当前阶段，保留已完成子任务。请求帮助、权限拒绝和文件完整性问题仍会阻塞，取消不触发重试。任务详情与日志页会展示机器错误、拦截标记和成员摘要，方便判断需要调整客户端还是补充任务信息。
-
-长分析建议使用 DSH、Claude、Codex 或自定义 stdin 成员。当前 Antigravity、Gemini、OpenCode 适配器通过命令行参数传入提示词；Windows 下超过保守长度上限会在启动前明确阻塞，不截断结果、不自动重试。Antigravity 的帮助虽声明支持流式标准输入，但其消息格式尚未验证，因此暂未切换适配器。
-
-## 接入 CLI
-
-成员页面支持 Antigravity、DSH ACP、Claude Code、Gemini CLI、Codex CLI、OpenCode 和自定义适配器。
-
-“检测到”只表示找到了可执行入口，不等于登录或模型调用已经验证。不同客户端版本的标志可能变化；未安装或未做真实调用的客户端不能视为已验证兼容。
-
-Windows 上配置原生 `.exe`，或 `node.exe` 加 JS 入口的前置参数。不拼接 `.cmd` / `.ps1` shell 包装命令。
-
-自定义成员支持：
-
-- 通过 stdin 接收任务文本，或在参数数组中使用 `{prompt}`。
-- `{workspace}` 替换为指定工作目录。
-- stdout 返回约定 JSON；结构参见 `server/adapters.mjs` 中的 `reportSchema`。
-
-CLI 登录和凭据由原客户端管理。工作台不复制官方客户端的登录 token。
-
-## DSH 与桌面会话
-
-DSH 通过标准 ACP v1 运行任务，可按房间续接会话、选择模型和取消执行。Windows 支持自动发现 DeepSeek Harness Desktop 0.2 的官方内置 CLI：校验安装目录中 `resources/app.asar` 的入口与版本，使用该程序自身的运行时启动；同时保留原生、npm 和旧 profile 入口的兼容。更新后，旧的自动发现入口会在成员空闲时迁移，保留显式模型选择、权限和原生会话；自定义安装不会被覆盖。每个成员独立的 profile、会话和缓存留在 `.team/dsh-runtime/<member-id>/home`；官方凭据与设置仅由 DSH 原有 provider 按路径读取，不复制其内容。默认模型沿用 DSH 设置。
-
-DSH 讨论轮禁用工具，只使用给定证据，单轮最多 3 分钟。纯分析中偶发调用不存在的工具只记录警告，权限拒绝仍然失败；连续三次工具失败（含不可用工具）会停止本轮，防止无效循环。讨论结论“不应执行”不等于讨论未完成，两者分别记录。恢复已有会话失败时不会静默创建新会话。确认需要重新建立上下文后可使用 `node tools/team.mjs reset-conversation --room ROOM_ID --to MEMBER_ID`，它仅解除工作台映射，保留原会话且不自动重放任务。
-
-“外部会话”读取现有 DSH v3/v4 日志，支持多帧 Zstandard、尾部追加检测、脱敏和只读挂载，并排除子代理会话。同一版本同时存在压缩和未压缩日志时会报告冲突，不擅自选择一份作为权威数据；遇到尚未支持的新版本也不会回退显示旧记录。只读挂载不会移动原会话、改稿、抢写锁、重放旧任务或新建一个同名写作进程。页面打开时每 15 秒同步一次，不消耗模型 token；后台同步不禁用前台挂载按钮。
-
-“只读接入”不等于“接管”。桌面端仍运行时不得通过另一个 CLI 强行恢复同一会话。DSH Desktop 的私有 renderer token 不会被提取；如需同进程控制，需在 DSH「浏览器与局域网」开启「允许在浏览器中打开」，范围保持本机，再接入其公开本机 API。当前只读集成不宣称已获得该控制权。
-
-也可以在“外部会话”点击“独立接力”：创建全新的团队任务和成员会话，保存有校验值的来源摘录，原桌面会话继续保持自己的写入权。此方式不需要开放桌面 HTTP 控制口。
-默认只创建待办，需要填写新的任务目标，不会重放原请求。来源摘录不是完整上下文，原文件也不会自动复制；主控只将明确选定的材料副本放入任务目录，再开始执行。模型不能把这些摘录当作新权限。来源摘录被改动时会阻止执行，它本身也不能作为交付产物通过验收。
-
-```powershell
-node tools/team.mjs dsh-list
-node tools/team.mjs dsh-import SESSION_ID
-node tools/team.mjs dsh-refresh
-node tools/team.mjs task --source-session SESSION_ID --draft --title "副本核验" --objective "核对提供材料，缺少证据则说明" --assignee dsh-builder --reviewer antigravity-reviewer
-node tools/team.mjs import-material TASK_ID --file "D:\明确选定的材料\chapter_0004.txt"
-node tools/team.mjs materials TASK_ID
-node tools/team.mjs start TASK_ID
-```
-
-## 输入材料
-
-可在“准备新任务”时选择文件，也可在尚未启动的任务详情“输入材料”中添加，或通过 CLI / MCP 导入。新建流程先保存待办，再导入和核对材料，最后由“准备完成并开始”明确启动。服务只接收文件字节，不接受可任意读取本机文件的 `sourcePath` 接口。
-CLI / MCP 客户端仅读取明确指定的文件，不递归扫描目录；文件内容不会回显给主控。不要选择凭据、配置密钥或未获授权的文件。
-
-- 材料位于任务目录的 `inputs/`，元数据及 SHA-256 保存在任务记录中。原文件不移动、不回写。
-- 单文件最多 8 MiB，每任务最多 64 份、合计 32 MiB。传输使用严格 Base64 和 SHA-256 校验。
-- 同名材料不能覆盖；首次运行前可以明确移除再重新导入。任务一旦启动，后续返工也不解锁材料。
-- 目标路径拒绝越界、特殊 Windows 路径和链接。材料改变或缺失会阻止成员执行或通过验收。
-- 材料与来源摘录不发布为交付物，也不能靠只上传输入通过“已产出”检查。
-- 桌面界面支持部分失败后重试、移除二次确认、加载失败重试；新建流程支持单份重试，重试不会启动任务，上传期间禁用启动按钮。
-- 关闭新建弹窗后可以继续准备；重开应用后未导入文件需重新选择，已导入文件按原待办记录和哈希核对。
-- 大小限制与哈希检查不等于 OS 沙箱，也不保证外部进程无法临时修改文件。
-
-```powershell
-node tools/team.mjs import-material TASK_ID --file "D:\材料\原文.txt" --name chapters/chapter-4.txt
-node tools/team.mjs materials TASK_ID
-node tools/team.mjs remove-material TASK_ID --material MATERIAL_ID
-```
-
-## 主控调用
-
-```powershell
-node tools/team.mjs status
-node tools/team.mjs inbox
-node tools/team.mjs send --room team --to antigravity-reviewer "请分析这个方案的关键风险"
-node tools/team.mjs task --title "小工具" --objective "生成指定文件并满足约束" --reviewer antigravity-reviewer
-node tools/team.mjs wait TASK_ID --timeout 60000
-node tools/team.mjs evidence EVIDENCE_ID
-node tools/team.mjs accept TASK_ID --note "已检查证据"
-```
-
-`task` 的 `--checks` 接受 JSON 参数数组，例如 `["node","--test"]`。这是用户或主控明确批准的程序调用，不执行模型临时给出的 shell 字符串。
-
-服务只在检查点返回精简结果；完整执行流不会自动送进 Codex 上下文。
-任务命令只回传路由、工作目录、材料数量和验收状态，不反复回显整段任务要求。
-大材料清单优先返回有问题的条目，明确报告省略数量；桌面界面仍保留完整列表。
-
-## MCP
-
-`node tools/mcp.mjs` 提供 stdio MCP。示例客户端配置：
+MCP 使用 stdio，示例配置：
 
 ```json
 {
@@ -240,63 +182,57 @@ node tools/team.mjs accept TASK_ID --note "已检查证据"
 }
 ```
 
-工具包括 `team_status`、`team_configure_controller`、`team_submit_objective`、`team_message`、`team_task`、`team_assign`、`team_progress`、`team_answer_assistance`、`team_materials`、`team_wait`、`team_evidence`、`team_decide`、`team_external_sessions`。
-`team_task` 支持 `sourceSessionId` 和 `start:false`，`team_decide` 的 `action:"start"` 启动已准备好材料的待办任务。
-`team_decide` 的 `action:"pause"` 暂停任务；`team_progress` 确认停稳后，`team_assign` 可通过 `participantIds` 更新协作者，省略该字段则保留原名单。保存后需明确 `action:"start"` 才继续。
-`team_progress` 同时返回协作问题与恢复信息；使用当前问题的 `helpId` 调用 `team_answer_assistance`，输入 `taskId`、`helpId`、`answer`（1–6000 字符）保存答复。答复只保存到当前等待处理的问题，不自动启动任务；检查进度后再明确 `team_decide action:"start"`。步骤结构检查通过不代表最终验收通过。
-`team_materials` 的 `action:"import"` 接收 `taskId`、明确选中的 `file` 及可选目标名称 `name`；
-`action:"list"` 查看材料和校验状态，`action:"remove"` 加 `materialId` 移除未启动任务的材料副本。
+常用 MCP 工具：`team_configure_controller`、`team_submit_objective`、`team_message`、`team_task`、`team_progress`、`team_answer_assistance`、`team_materials`、`team_evidence`、`team_decide`。
 
-配置示例没有自动写入任何客户端的全局配置。项目 skill 位于 `skills/cli-team-controller/SKILL.md`，也没有自动安装到全局技能目录。
+项目 skill 位于 [`skills/cli-team-controller/SKILL.md`](skills/cli-team-controller/SKILL.md)，不会自动安装到全局技能目录。
 
-## 安全与限制
+</details>
 
-- 目录隔离、路径审计和 worktree 都不是 Windows 操作系统沙箱。对不可信代码需要额外隔离。
-- 默认不使用绕过审批的 CLI 参数。权限拒绝、缺失结果、结构化报告不合法都会阻止成功。
-- 评审与讨论使用只读模式，并检测工作区变化。同一目录中的写入与其他读取串行化。
-- 验收程序本身也能运行代码，必须由用户或主控明确选定；不能把运行测试当作天然安全。
-- 首版验收命令应保持交付文件不变；验收期间改变产物会使证据失效。
-- 跳过或零项测试不会作为有效测试验收。未配置自动化验收时必须明确确认人工验收。
-- 未解决的严重评审问题、验收失败或产物版本变化不能通过接受接口绕过。
-- 服务重启不会盲目重放之前的任务；中断状态等待重新派单。
-- 默认每个成员同一时间只执行一项任务，并发上限 2，转交上限 2，返工上限 2。
-- 外部服务可以持续运行，但当前 Codex 对话不会因此自动全天候在线。没有安装定时唤醒或开机自启动。
-- `.team/` 含本地主控凭据、数据库和日志，不应提交或公开分享。
-- 桌面程序会检查本地启动暂停标记；存在该标记时不会启动本地服务或执行成员任务。
-
-## 文件布局
-
-```text
-server/       调度器、适配器、API、权限与验收检查
-ui/           React 工作台
-tools/        主控 CLI 与 MCP
-tests/        状态机、进程、接口与安全回归测试
-skills/       项目 skill
-.team/        本机运行数据与日志，不进版本控制
-workspaces/   成员任务目录及真实交付产物
-work/         开发过程、临时验证材料，不进版本控制
-```
-
-## 验证
+<details>
+<summary><strong>开发、检查与项目结构</strong></summary>
 
 ```powershell
 npm test
 npm run check
 npm run build
+npm run smoke:desktop
+npm run smoke:desktop -- --packaged
 ```
 
-确定性测试不调用付费模型。真实 CLI 验证单独进行，不能将模拟适配器测试当作某个供应商已经联网通过。
+| 目录 | 内容 |
+| --- | --- |
+| `desktop/` | Electron 主进程、桌面桥接与窗口测试 |
+| `server/` | 调度器、适配器、API、权限、验收与持久化 |
+| `ui/` | React 中文工作台 |
+| `tools/` | 主控 CLI、MCP、打包与桌面检查 |
+| `tests/` | 状态机、进程、接口、材料和桌面回归 |
+| `.team/` | 本机运行数据与日志，不进版本控制 |
+| `workspaces/` | 任务目录与真实交付产物，不进版本控制 |
 
-2026-10-14 的检查覆盖消息重试、任务准备、负责人协作、求助、托管交付、验收成果、归档和桌面恢复，并接入 DSH 0.2.0-rc.2。后续修复了运行设置覆盖、讨论重复创建与草稿恢复、成员保存、日志与成果下载重试、外部会话同步等日常操作问题。DSH 官方默认模型的首轮、续接及文件交付已重新实测通过。详细证据见[功能检查记录](docs/validation/2026-10-14-functional-audit.md)和[日常操作检查](docs/validation/2026-10-14-ux-audit.md)。这些优化当时只更新源码和开发构建，随后纳入 10 月 15 日桌面包。
+贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。确定性测试不调用付费模型；真实 CLI 验证单独进行。
 
-继续从用户操作检查任务启动、取消、作业终止、改派、验收、返工和页面往返，详见[任务操作与失败恢复检查](docs/validation/2026-10-14-task-actions-ux.md)。
+</details>
 
-2026-10-15 补齐聊天历史分页、断线多页补读、历史阅读位置与加载失败恢复，并优化数据库读取和矮窗口的正文空间。结果见[聊天历史与连续阅读优化](docs/validation/2026-10-15-message-history.md)。后续补齐主控目标草稿重试、团队配置往返、提交超时与清理恢复，见[主控目标操作优化记录](docs/validation/2026-10-15-managed-request-ux.md)。
+## 安全边界
 
-2026-10-15 已按用户要求生成新桌面包，项目根目录的 `CLI Team 桌面端.lnk` 已更新到本次版本。包含上述聊天历史、日常操作、任务恢复和主控目标优化，发布及成品检查见[10 月 15 日桌面发布记录](docs/validation/2026-10-15-desktop-release.md)。
+- 本地服务只绑定 `127.0.0.1`，并使用随机桌面令牌或本地主控凭据。
+- 桌面渲染器启用沙箱，不提供 Node 权限；普通浏览器不能打开工作台。
+- 默认不使用绕过审批的 CLI 参数，权限拒绝会阻止成功。
+- 目录隔离和文件哈希不是操作系统沙箱。对不可信代码仍需额外隔离。
+- 验收程序本身可以运行代码，必须由用户或主控明确选择。
+- `.team/` 包含本地凭据、数据库和日志，不应提交或公开分享。
+- 存在本地启动暂停标记时，桌面程序不会启动服务或执行成员任务。
 
-同日后续修正版解决了 DSH 旧会话引用已移除模型时无法恢复的问题：使用成员当前选择或官方默认模型，确认切换后继续原会话，保留历史上下文。已补充旧成品故障复现、真实 DSH 模型对话及用户失败会话副本的验证，详见[DSH 模型恢复修复记录](docs/validation/2026-10-15-dsh-model-recovery.md)。使用原快捷方式前，请先关闭仍在运行的旧窗口。
+## 已知限制
 
-2026-10-09 桌面体验第一批改进已确认 `npm test` 为 236 项通过、0 失败、0 跳过。类型检查、构建及开发版与成品桌面流程的最终结果在[本轮交付记录](docs/validation/2026-10-09-desktop-usability.md)中分别汇总；本记录暂不将待汇总的桌面检查计为通过。
+- 当前桌面发行包仅提供 Windows x64。
+- 程序未进行代码签名，Windows 可能显示 SmartScreen 提示。
+- 官方 CLI 需要自行安装、登录并承担相应额度。
+- 当前 Codex 对话不会因为本地服务运行而全天候在线，也没有安装开机自启或定时唤醒。
+- 模型结果和成员报告都视为未验证声明；验收依赖机器证据、独立评审和用户规则。
 
-历史验证记录已整理为通用交付说明。当前分支不包含真实任务材料、验收回执、运行数据或个人工作区内容。
+---
+
+<p align="center">
+  <sub>本地优先 · 证据驱动 · 中文桌面工作台</sub>
+</p>
