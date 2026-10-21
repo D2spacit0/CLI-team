@@ -2,12 +2,6 @@
 
 Windows 桌面多 CLI 团队工作台。双击程序进入独立窗口，负责人调度成员、执行任务并交叉评审，验收证据保留在本地。产品入口仅为桌面程序。
 
-## 启动安全记录
-
-2026-09-17，安全软件删除了生成的 `Start-Workbench.ps1`，检测名为 `HEUR:TrojanDownloader/PS.NetLoader.ae`。
-
-被删脚本未恢复，记录保留在 `SECURITY-REVIEW.md`。现按用户要求改为 Electron 桌面程序管理本地服务，不恢复原 PowerShell 包装器。原告警没有被认定为误报。若 `.team/security-hold.json` 再次存在，桌面服务仍会拒绝启动。
-
 ## 使用桌面程序
 
 双击项目根目录的 `CLI Team 桌面端.lnk` 打开最新桌面包；每次成功打包都会同步更新这个入口。也可以在 `release` 下打开完整打包目录，双击 `CLI Team.exe`，最新构建位置记录在 `release/latest-desktop.json`。程序已包含 Electron 和 Node.js 24+，不需要另装 Node.js，也不会打开外部浏览器。请保留整个程序目录，不能只复制 exe。
@@ -268,6 +262,7 @@ node tools/team.mjs accept TASK_ID --note "已检查证据"
 - 默认每个成员同一时间只执行一项任务，并发上限 2，转交上限 2，返工上限 2。
 - 外部服务可以持续运行，但当前 Codex 对话不会因此自动全天候在线。没有安装定时唤醒或开机自启动。
 - `.team/` 含本地主控凭据、数据库和日志，不应提交或公开分享。
+- 桌面程序会检查本地启动暂停标记；存在该标记时不会启动本地服务或执行成员任务。
 
 ## 文件布局
 
