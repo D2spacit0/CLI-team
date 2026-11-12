@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/D2spacit0/CLI-team/releases/latest">
+  <a href="#快速开始">
     <img src="docs/assets/banner.webp" alt="CLI Team - 把多个 CLI 组织成一支可验收的团队" width="100%">
   </a>
 </p>
@@ -9,15 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/D2spacit0/CLI-team/releases/latest"><img alt="下载 Windows 版" src="https://img.shields.io/badge/下载-Windows_x64-2563eb?style=for-the-badge&logo=windows11&logoColor=white"></a>
+  <a href="#快速开始"><img alt="下载 Windows 版" src="https://img.shields.io/badge/下载-Windows_x64-2563eb?style=for-the-badge&logo=windows11&logoColor=white"></a>
   <a href="#快速开始"><img alt="快速开始" src="https://img.shields.io/badge/快速开始-2_分钟-0f766e?style=for-the-badge"></a>
-  <img alt="版本 v0.1.0" src="https://img.shields.io/badge/版本-v0.1.0-334155?style=for-the-badge">
+  <img alt="已发布版本 v0.1.0" src="https://img.shields.io/badge/已发布版本-v0.1.0-334155?style=for-the-badge">
   <img alt="数据保存在本地" src="https://img.shields.io/badge/数据-保存在本地-7c3aed?style=for-the-badge">
 </p>
 
 > 用一个目标调动多个官方 CLI。在同一项目中交代要求、查看团队接力、审阅完整成果；负责人安排派工与返工，程序保存版本和证据，最终发布由你确认。
 
-当前源码包含 **2026-11-12 项目协作升级与科幻工作台改版**。深色指挥台把项目交接、负责人通讯和固定整稿放在同一工作面；GitHub 的既有 `v0.1.0` 下载包不代表已包含本轮变化。最新验证范围见[改版记录](docs/validation/2026-11-12-scifi-workbench.md)，底层协作与恢复规则见[业务升级记录](docs/validation/2026-11-12-team-upgrade.md)。
+当前源码包含 **2026-11-12 项目协作升级与科幻工作台改版**。深色指挥台把项目交接、负责人通讯和固定整稿放在同一工作面；GitHub 已发布的 `v0.1.0` 下载包尚未包含本轮变化。最新验证范围见[改版记录](docs/validation/2026-11-12-scifi-workbench.md)，底层协作与恢复规则见[业务升级记录](docs/validation/2026-11-12-team-upgrade.md)。
 
 ## 一张图看懂
 
@@ -84,8 +84,10 @@ CLI Team 继续使用现有 Node、SQLite、React 和官方 CLI 执行层；本�
 ## 交付不是一句话
 
 <p align="center">
-  <img src="docs/assets/managed-delivery.webp" alt="主控任务详情：派工、返工、机器检查、独立评审和最终交付" width="100%">
+  <img src="docs/assets/scifi-delivery-20261112.png" alt="新版科幻工作台的本地交付演练：一次返工后，机器检查、独立评审和主控终审通过" width="100%">
 </p>
+
+图为本地确定性交付演练：测试成员实际执行，完成一次返工、机器检查、独立评审与主控终审。演练不调用真实模型。
 
 ```text
 提交目标 → 主控拆解 → 成员执行 → 步骤审查
@@ -98,6 +100,8 @@ CLI Team 继续使用现有 Node、SQLite、React 和官方 CLI 执行层；本�
 任务只有在机器证据有效、产物版本未变化、独立评审和主控终审都通过时才自动交付。没有配置检查或缺少完整证据时，任务会停在待验收，交给用户确认。
 
 ## 快速开始
+
+**下面的下载步骤适用于已发布的 `v0.1.0`，该包仍是旧界面。** 要使用上方新版界面，请展开本节下方的「从源码运行与打包」。
 
 1. 从 [Releases](https://github.com/D2spacit0/CLI-team/releases/latest) 下载 `CLI-Team-v0.1.0-win32-x64-release.zip`。
 2. 解压并保留整个 `CLI Team-win32-x64` 目录。
