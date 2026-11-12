@@ -30,6 +30,8 @@ import {
   BookOpen,
   Clock3,
   Activity,
+  Orbit,
+  FolderOpen,
 } from 'lucide-react';
 import type {
   Bootstrap,
@@ -70,6 +72,9 @@ import { FixtureWorkbench } from './workbench/fixtures/FixtureWorkbench';
 import { useWorkbenchRoute } from './workbench/navigation/useWorkbenchRoute';
 import ManagedRequestDialog from './ManagedRequestDialog';
 import ManagedTeamSettings from './ManagedTeamSettings';
+import BusinessWorkspace from './projects/BusinessWorkspace';
+import BusinessSettings from './projects/BusinessSettings';
+import { useBusinessState } from './projects/useBusinessState';
 
 type NavTab = WorkbenchTab;
 type TaskBusySource = 'materials' | 'assignment' | 'coordination' | 'start' | 'accept' | 'revise' | 'cancel' | 'archive' | 'refresh';
@@ -91,9 +96,14 @@ export default function App() {
 
   // 核心数据状态
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
+  const business = useBusinessState(bootstrap?.workspace.root);
+  const businessBusy = useRef(false);
+  const unsavedBusiness = useRef(false);
+  const reportBusinessBusy = useCallback((busy: boolean) => { businessBusy.current = busy; }, []);
+  const reportBusinessUnsaved = useCallback((unsaved: boolean) => { unsavedBusiness.current = unsaved; }, []);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<NavTab>(route.view || 'rooms');
+  const [activeTab, setActiveTab] = useState<NavTab>(route.view || 'projects');
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
   const [activeRoomId, setActiveRoomId] = useState<string | null>(
@@ -322,6 +332,7 @@ export default function App() {
       if (taskCreateBusy.current || sendingMessageRef.current.size || Object.values(taskBusyRef.current).some(hasTaskBusy)
           || unsavedSettings.current || unsavedTeam.current || pauseLock.current || discussionBusy.current
           || memberSaveLock.current || memberActionLocks.current.size || confirmActionLock.current
+          || businessBusy.current || unsavedBusiness.current
           || discardMemberOpen) return false;
       // Freeze synchronously so later keystrokes cannot arrive after the save receipt.
       leaving = true;
@@ -508,6 +519,7 @@ export default function App() {
         refreshDebounceTimer.current = setTimeout(() => {
           refreshDebounceTimer.current = null;
           loadBootstrap();
+          void business.refresh();
           if (activeRoomId) {
             loadRoomMessages(activeRoomId);
           }
@@ -525,7 +537,7 @@ export default function App() {
         refreshDebounceTimer.current = null;
       }
     };
-  }, [loadBootstrap, loadRoomMessages, activeRoomId]);
+  }, [loadBootstrap, loadRoomMessages, activeRoomId, business.refresh]);
 
   // Escape 键关闭弹窗
   useEffect(() => {
@@ -1126,26 +1138,28 @@ export default function App() {
             onClick={() => setMobileNavOpen((v) => !v)}
             title="展开/收起菜单"
             aria-label="展开/收起菜单"
+            aria-expanded={mobileNavOpen}
+            aria-controls="workbench-navigation"
           >
             <Menu size={16} />
           </button>
           <div className="brand-title">
-            <img src="/brand.png" alt="" width={28} height={28} />
-            <span>CLI Team{window.cliTeamDesktop ? ' · 桌面工作台' : ''}</span>
+            <span className="brand-orbit-mark" aria-hidden="true"><Orbit size={24} strokeWidth={1.6} /></span>
+            <span className="brand-wordmark"><strong>CLI Team</strong><small>团队指挥工作台</small></span>
           </div>
           {bootstrap && (
             <div className="header-workspace-badge" title={bootstrap.workspace.root}>
-              {bootstrap.workspace.root}
+              <FolderOpen size={13} /><span>{bootstrap.workspace.root.split(/[\\/]/).filter(Boolean).at(-1) || bootstrap.workspace.root}</span>
             </div>
           )}
         </div>
 
         <div className="header-actions">
-          <button className="btn btn-sm btn-primary" onClick={() => openManagedRequest()} disabled={!bootstrap}>
+          <button className="btn btn-sm btn-secondary header-delegate-btn" onClick={() => openManagedRequest()} disabled={!bootstrap} aria-label="交给主控" title="交给主控">
             <Send size={13} /><span>交给主控</span>
           </button>
           {/* SSE 状态指示器 */}
-          <div className="connection-pill" title={`实时连接状态: ${sseStatus}`}>
+          <div className="connection-pill" role="status" aria-label={sseStatus === 'connected' ? '实时连接已连接' : sseStatus === 'connecting' ? '实时连接中' : '实时连接已断开'} title={sseStatus === 'connected' ? '实时连接已连接' : sseStatus === 'connecting' ? '实时连接中' : '实时连接已断开'}>
             <span className={`status-dot ${sseStatus}`} />
             <span>
               {sseStatus === 'connected'
@@ -1160,7 +1174,7 @@ export default function App() {
           {bootstrap && (
             <div className="runs-count-pill" title="当前活跃执行作业数">
               <Cpu size={13} />
-              <span>活跃作业: {bootstrap.workspace.activeRuns}</span>
+              <span>运行中 <strong>{bootstrap.workspace.activeRuns}</strong></span>
             </div>
           )}
 
@@ -1188,6 +1202,7 @@ export default function App() {
           activeTab={activeTab}
           mobileNavOpen={mobileNavOpen}
           bootstrap={bootstrap}
+          business={business.data}
           onTabChange={handleTabChange}
         />
 
@@ -1209,6 +1224,14 @@ export default function App() {
           )}
 
           {activeTab === 'fixtures' && <FixtureWorkbench />}
+
+          {(activeTab === 'projects' || activeTab === 'publications') && bootstrap && <BusinessWorkspace
+            view={activeTab} bootstrap={bootstrap} state={business.data} loading={business.loading} error={business.error}
+            revision={business.revision} projectId={route.projectId} contentId={route.contentId}
+            versionId={route.versionId} focusId={route.focusId} panel={route.panel}
+            onNavigate={(view, selection) => { setActiveTab(view); navigate(view, selection); }}
+            onRefresh={business.refresh} onSettings={() => handleTabChange('settings')} onMembers={() => handleTabChange('members')}
+            onBusy={reportBusinessBusy} />}
 
           <RoomWorkbench
             hidden={activeTab !== 'rooms'}
@@ -1618,6 +1641,8 @@ export default function App() {
 
               <div className="settings-container">
                 <DesktopSettings />
+                <BusinessSettings state={business.data} bootstrap={bootstrap} onRefresh={business.refresh}
+                  onMembers={() => handleTabChange('members')} onBusy={reportBusinessBusy} onUnsaved={reportBusinessUnsaved} />
                 {bootstrap && <ManagedTeamSettings team={bootstrap.workspace.managedTeam || null} members={bootstrap.members}
                   onSaved={(team) => {
                     bootstrapSequence.current++;

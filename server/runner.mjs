@@ -5,9 +5,18 @@ import { stripVTControlCharacters } from 'node:util';
 import { buildInvocation, findExecutable, OutputCollector } from './adapters.mjs';
 import { childEnvironment, killChild, redact } from './safety.mjs';
 import { executeDsh } from './dsh-runner.mjs';
+import { prepareWindowsSupervision } from './windows-process-supervisor.mjs';
+import { inspectProcessExit } from './process-state.mjs';
 
-export async function runProcess({ executable, args, stdin = '', cwd, proxy, timeoutMs, signal, logFile, onLine }) {
+export async function runProcess({ executable, args, stdin = '', cwd, proxy, timeoutMs, signal, logFile, onLine, onProcess, processStateDir }) {
   fs.mkdirSync(path.dirname(logFile), { recursive: true });
+  let supervised;
+  if (!signal?.aborted) {
+    try { supervised = prepareWindowsSupervision({ executable, args, cwd,
+      directory: path.join(processStateDir || path.join(path.dirname(logFile), '.team'), 'process-supervision') }); }
+    catch (error) { return { exitCode: null, output: '', error: error.message, timedOut: false, cancelled: false,
+      processExitConfirmed: true, processExitEvidence: { method: 'launch_not_attempted', confirmed: true } }; }
+  }
   return new Promise((resolve) => {
     const log = fs.createWriteStream(logFile, { flags: 'w', encoding: 'utf8' });
     let child;
@@ -18,52 +27,79 @@ export async function runProcess({ executable, args, stdin = '', cwd, proxy, tim
     let timedOut = false;
     let completed = false;
     let timer;
+    let killTimer;
+    let processState = { phase: 'prepared', pid: null, supervision: supervised?.supervision || { kind: 'posix_process_group', version: 1 } };
     const finish = (code) => {
       if (completed) return;
       completed = true;
       clearTimeout(timer);
+      clearTimeout(killTimer);
       signal?.removeEventListener('abort', cancel);
-      if (remainder) onLine?.(remainder);
+      const proof = !child?.pid ? { confirmed: true, method: 'launch_not_attempted' } : inspectProcessExit(processState);
+      if (!proof.confirmed) error ||= proof.reason;
+      error ||= proof.receipt?.error || null;
+      processState = { ...processState, phase: 'exited', exitCode: code, exitedAt: new Date().toISOString(),
+        processExitConfirmed: proof.confirmed, exitEvidence: proof };
+      try { onProcess?.(processState); }
+      catch (failure) { error ||= failure.message; }
+      try { supervised?.cleanup(); } catch (failure) { error ||= failure.message; }
+      if (remainder) { try { onLine?.(remainder); } catch (failure) { error ||= failure.message; } }
       log.end(() => resolve({ exitCode: code, output: redact(output), error,
-        timedOut, cancelled: Boolean(signal?.aborted) }));
+        timedOut, cancelled: Boolean(signal?.aborted), processExitConfirmed: proof.confirmed, processExitEvidence: proof }));
     };
-    const cancel = () => killChild(child);
+    const cancel = () => {
+      if (completed || !child) return;
+      if (!supervised) { killChild(child); return; }
+      try { supervised.cancel(); }
+      catch (failure) { error ||= failure.message; killChild(child); }
+      // A stuck supervisor is force-stopped, but missing receipt still keeps the
+      // business member quarantined. Helper death closes its kill-on-close job.
+      killTimer ||= setTimeout(() => killChild(child), 5000);
+    };
     log.on('error', (failure) => { error = failure.message; cancel(); });
     if (signal?.aborted) { finish(null); return; }
     try {
-      child = spawn(executable, args, {
+      onProcess?.(processState);
+      child = spawn(supervised?.executable || executable, supervised?.args || args, {
         cwd, env: childEnvironment(proxy), shell: false, windowsHide: true,
         detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch (failure) { error = failure.message; finish(null); return; }
     signal?.addEventListener('abort', cancel, { once: true });
     timer = setTimeout(() => {
-      timedOut = true; error = '执行超时'; killChild(child);
+      timedOut = true; error = '执行超时'; cancel();
     }, timeoutMs);
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => {
       bytes += Buffer.byteLength(chunk);
-      if (bytes > 8 * 1024 * 1024) { error = '输出超过 8 MiB 上限'; killChild(child); return; }
+      if (bytes > 8 * 1024 * 1024) { error = '输出超过 8 MiB 上限'; cancel(); return; }
       log.write(redact(chunk));
       output = (output + chunk).slice(-64000);
       remainder += chunk;
       const lines = remainder.split(/\r?\n/);
       remainder = lines.pop() || '';
       for (const line of lines) if (line.trim()) {
-        try { onLine?.(line); } catch (failure) { error = failure.message; killChild(child); }
+        try { onLine?.(line); } catch (failure) { error = failure.message; cancel(); }
       }
-      if (remainder.length > 2 * 1024 * 1024) { error = '单个事件过大'; killChild(child); }
+      if (remainder.length > 2 * 1024 * 1024) { error = '单个事件过大'; cancel(); }
     });
     child.stderr.on('data', (chunk) => {
       bytes += Buffer.byteLength(chunk);
       log.write(redact(`[stderr] ${chunk}`));
       output = (output + chunk).slice(-64000);
-      if (bytes > 8 * 1024 * 1024) { error = '输出超过 8 MiB 上限'; killChild(child); }
+      if (bytes > 8 * 1024 * 1024) { error = '输出超过 8 MiB 上限'; cancel(); }
     });
     child.on('error', (failure) => { error = failure.message; });
     child.on('close', (code) => finish(code));
     child.stdin.on('error', (failure) => { if (failure.code !== 'EPIPE') error = failure.message; });
+    processState = { ...processState, phase: 'spawned', pid: child.pid || null, spawnedAt: new Date().toISOString() };
+    try { onProcess?.(processState); }
+    catch (failure) {
+      // The process already exists. Keep its slot and await close even if the
+      // durable observer failed; never turn this into an unstarted call.
+      error = failure.message; cancel(); child.stdin.end(); return;
+    }
     child.stdin.end(stdin);
   });
 }
@@ -75,12 +111,15 @@ export async function executeAgent(member, prompt, options) {
   catch (error) {
     if (error.code !== 'CLI_INPUT_TOO_LONG') throw error;
     return { success: false, error: error.message, response: '', report: null,
-      riskFlags: ['cli_input_too_long'], exitCode: null };
+      riskFlags: ['cli_input_too_long'], exitCode: null, processExitConfirmed: true,
+      processExitEvidence: { confirmed: true, method: 'launch_not_attempted' } };
   }
   const collector = new OutputCollector(member.provider, options.workspace);
   const execution = await runProcess({
     ...invocation, cwd: options.workspace, proxy: options.proxy, signal: options.signal,
     timeoutMs: options.timeoutMinutes * 60000, logFile: options.streamLog,
+    onProcess: options.onProcess,
+    processStateDir: options.dataDir,
     onLine: (line) => collector.line(line),
   });
   const result = collector.finish(execution.exitCode);

@@ -57,6 +57,12 @@ export function childEnvironment(proxy) {
   const env = { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1', AGY_CLI_DISABLE_AUTO_UPDATE: 'true' };
   // Nested Node test runners otherwise skip their files while returning exit 0.
   delete env.NODE_TEST_CONTEXT;
+  // Desktop/controller capabilities and the parent's IPC descriptor never
+  // belong to a CLI child, even when a caller supplied them in its environment.
+  for (const key of Object.keys(env)) {
+    if (/^CLI_TEAM_(?:DESKTOP|CONTROLLER|APPROVAL|IPC|PARENT|BACKEND)(?:_|$)/i.test(key) ||
+        /^(?:NODE_CHANNEL_FD|NODE_CHANNEL_SERIALIZATION_MODE|ELECTRON_RUN_AS_NODE)$/i.test(key)) delete env[key];
+  }
   if (proxy === '') {
     for (const key of ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']) delete env[key];
   }

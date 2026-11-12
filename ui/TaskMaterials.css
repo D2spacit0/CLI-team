@@ -10,8 +10,8 @@
 .material-name, .material-progress { font-size: 12px; overflow-wrap: anywhere; }
 .material-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 .material-meta code { font-size: 11px; overflow-wrap: anywhere; cursor: help; }
-.material-integrity.verified { color: #147c57; }
-.material-integrity.changed, .material-integrity.missing, .material-integrity.unsafe { color: #b73542; }
+.material-integrity.verified { color: var(--wb-success); }
+.material-integrity.changed, .material-integrity.missing, .material-integrity.unsafe { color: var(--wb-danger); }
 .material-empty { padding: 6px 0; color: var(--text-muted); font-size: 12px; }
 .material-error { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
 .material-error > svg { flex-shrink: 0; }
@@ -19,8 +19,8 @@
 .task-input-picker { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; }
 .material-help { margin: 0; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
 .material-input-icon { display: flex; color: var(--text-muted); flex-shrink: 0; }
-.material-input-status.imported { color: #147c57; }
-.material-input-status.failed, .material-input-status.missing, .material-item-error { color: #b73542; }
+.material-input-status.imported { color: var(--wb-success); }
+.material-input-status.failed, .material-input-status.missing, .material-item-error { color: var(--wb-danger); }
 .material-input-status.uploading { color: var(--text-primary); }
 .material-item-error { margin: 4px 0 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .material-reselect-note { padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; }

@@ -1,6 +1,8 @@
 import { parseArgs } from 'node:util';
 import { request, compact } from './client.mjs';
 import { importLocalMaterial } from './materials.mjs';
+import { readBusinessState, createBusinessProject, sendBusinessMessage, submitBusinessFact,
+  importBusinessMaterial, previewBusinessContent, requestBusinessRevision } from './business-client.mjs';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -18,6 +20,10 @@ const { values, positionals } = parseArgs({
     file: { type: 'string' }, name: { type: 'string' }, material: { type: 'string' },
     archived: { type: 'boolean', default: false }, category: { type: 'string' }, task: { type: 'string' },
     'request-id': { type: 'string' }, 'manual-delivery': { type: 'boolean', default: false },
+    section: { type: 'string' }, entity: { type: 'string' }, offset: { type: 'string' }, limit: { type: 'string' },
+    body: { type: 'string' }, brief: { type: 'string' }, timezone: { type: 'string' }, limits: { type: 'string' },
+    'fact-type': { type: 'string' }, 'source-label': { type: 'string' }, 'source-url': { type: 'string' },
+    version: { type: 'string' }, 'text-offset': { type: 'string' }, 'text-limit': { type: 'string' },
   },
 });
 const [command = 'status', entityId] = positionals;
@@ -118,7 +124,37 @@ try {
       result = await request(`/api/tasks/${encodeURIComponent(entityId)}/revise`, { feedback: values.feedback }); break;
     case 'cancel':
       result = await request(`/api/${entityId.startsWith('task-') ? 'tasks' : 'runs'}/${encodeURIComponent(entityId)}/cancel`, {}); break;
-    default: throw new Error('命令：status, inbox, configure-team, submit, room, archive, restore, send, task, start, pause, progress, answer, assign, materials, import-material, remove-material, meeting, wait, evidence, accept, revise, cancel, dsh-list, dsh-import, dsh-refresh, reset-conversation');
+    case 'business-state':
+      result = await readBusinessState({ projectId: entityId, section: values.section, entityId: values.entity,
+        offset: values.offset === undefined ? undefined : Number(values.offset), limit: values.limit === undefined ? undefined : Number(values.limit) });
+      break;
+    case 'project-create':
+      result = await createBusinessProject({ requestId: values['request-id'], name: values.name, objective: values.objective,
+        ownerId: values.assignee, reviewerId: values.reviewer,
+        memberIds: values.members?.split(',').map(id => id.trim()).filter(Boolean), brief: values.brief,
+        timeZone: values.timezone, start: !values.draft, limits: values.limits === undefined ? undefined : JSON.parse(values.limits) });
+      break;
+    case 'project-message':
+      result = await sendBusinessMessage({ projectId: entityId, requestId: values['request-id'], body: values.body || positionals.slice(2).join(' '), recipientId: values.to });
+      break;
+    case 'project-fact':
+      if (values['source-url'] && !values['source-label']) throw new Error('来源 URL 需要同时提供 --source-label');
+      result = await submitBusinessFact({ projectId: entityId, requestId: values['request-id'], type: values['fact-type'],
+        content: values.body || positionals.slice(2).join(' '), source: values['source-label'] ? { label: values['source-label'], url: values['source-url'] } : undefined });
+      break;
+    case 'project-material':
+      result = await importBusinessMaterial({ projectId: entityId, requestId: values['request-id'], file: values.file, name: values.name });
+      break;
+    case 'content-preview':
+      result = await previewBusinessContent({ contentId: entityId, versionId: values.version, section: values.section,
+        offset: values.offset === undefined ? undefined : Number(values.offset), limit: values.limit === undefined ? undefined : Number(values.limit),
+        textOffset: values['text-offset'] === undefined ? undefined : Number(values['text-offset']),
+        textLimit: values['text-limit'] === undefined ? undefined : Number(values['text-limit']) });
+      break;
+    case 'content-revise':
+      result = await requestBusinessRevision({ contentId: entityId, versionId: values.version, requestId: values['request-id'], feedback: values.feedback });
+      break;
+    default: throw new Error('命令：status, inbox, configure-team, submit, room, archive, restore, send, task, start, pause, progress, answer, assign, materials, import-material, remove-material, meeting, wait, evidence, accept, revise, cancel, dsh-list, dsh-import, dsh-refresh, reset-conversation, business-state, project-create, project-message, project-fact, project-material, content-preview, content-revise');
   }
   console.log(JSON.stringify(compact(result), null, 2));
 } catch (error) {

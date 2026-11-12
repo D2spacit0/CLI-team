@@ -11,6 +11,8 @@ import { dshHome } from './dsh-sessions.mjs';
 import { describeDshConfiguration } from './dsh-config.mjs';
 import { diagnosticText, protocolError, runtimeHint } from './runtime-diagnostics.mjs';
 import { validateDshModelRecovery } from './dsh-resume-model.mjs';
+import { prepareWindowsSupervision } from './windows-process-supervisor.mjs';
+import { inspectProcessExit } from './process-state.mjs';
 
 export function prepareDshRuntime(options, member) {
   const key = /^[a-zA-Z0-9-]{1,100}$/.test(member.id || '') ? member.id
@@ -113,17 +115,25 @@ export async function executeDsh(member, prompt, options) {
   const diagnostics = { transport: 'acp', stage: 'entry', method: null, requestedModel: member.model || null,
     selectedModel: null, promptSubmitted: false,
     session: { operation: options.conversationId ? 'resume' : 'new', requestedId: options.conversationId || null, id: null, state: 'pending' } };
-  let invocation, runtime;
+  let invocation, runtime, supervised, processState;
   try {
+    if (options.signal?.aborted) throw new Error('DSH 执行已取消');
     invocation = buildInvocation(member, '', options);
     diagnostics.stage = 'configuration';
     runtime = prepareDshRuntime(options, member);
     diagnostics.configurationSources = runtime.configuration.sources.map((source) => source.path);
     diagnostics.defaultModel = runtime.configuration.defaultModel;
+    supervised = prepareWindowsSupervision({ executable: invocation.executable,
+      args: [...runtime.nodeArgs, ...invocation.args, '--patch', runtime.patchFile], cwd: options.workspace,
+      directory: path.join(options.dataDir || path.join(path.dirname(options.streamLog), '.team'), 'process-supervision') });
+    processState = { phase: 'prepared', pid: null, supervision: supervised?.supervision || { kind: 'posix_process_group', version: 1 } };
+    options.onProcess?.(processState);
   } catch (cause) {
+    try { supervised?.cleanup(); } catch { /* No official process has started. */ }
     const detail = protocolError(cause);
     return { success: false, response: '', report: null, conversationId: null, exitCode: null,
       riskFlags: ['connection_failed'], error: detail.text,
+      processExitConfirmed: true, processExitEvidence: { confirmed: true, method: 'launch_not_attempted' },
       diagnostics: { ...diagnostics, ...detail, hint: runtimeHint(detail.text, diagnostics.stage) } };
   }
   fs.mkdirSync(path.dirname(options.streamLog), { recursive: true });
@@ -138,7 +148,8 @@ export async function executeDsh(member, prompt, options) {
   let totalBytes = 0;
   let timedOut = false;
   let consecutiveToolFailures = 0;
-  const child = spawn(invocation.executable, [...runtime.nodeArgs, ...invocation.args, '--patch', runtime.patchFile], {
+  const child = spawn(supervised?.executable || invocation.executable,
+    supervised?.args || [...runtime.nodeArgs, ...invocation.args, '--patch', runtime.patchFile], {
     cwd: options.workspace, env: runtime.env, shell: false, windowsHide: true,
     detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'],
   });
@@ -146,13 +157,36 @@ export async function executeDsh(member, prompt, options) {
   child.once('spawn', () => { diagnostics.processStarted = true; });
   const log = fs.createWriteStream(options.streamLog, { encoding: 'utf8' });
   let closed = false;
+  let exitProof = { confirmed: false, reason: '尚未确认进程树退出' };
+  let killTimer;
+  const stopChild = () => {
+    if (closed) return;
+    if (!supervised) { killChild(child); return; }
+    try { supervised.cancel(); }
+    catch (cause) { error ||= cause.message; killChild(child); }
+    killTimer ||= setTimeout(() => killChild(child), 5000);
+  };
   const exited = new Promise((resolve) => {
-    child.once('close', (code) => { closed = true; resolve(code); });
+    child.once('close', (code) => {
+      closed = true;
+      clearTimeout(killTimer);
+      exitProof = !child.pid ? { confirmed: true, method: 'launch_not_attempted' } : inspectProcessExit(processState);
+      if (!exitProof.confirmed) error ||= exitProof.reason;
+      error ||= exitProof.receipt?.error || null;
+      processState = { ...processState, phase: 'exited', exitCode: code, exitedAt: new Date().toISOString(),
+        processExitConfirmed: exitProof.confirmed, exitEvidence: exitProof };
+      try { options.onProcess?.(processState); }
+      catch (cause) { error ||= cause.message; }
+      resolve(code);
+    });
   });
   let rejectFailure;
   const failure = new Promise((_, reject) => { rejectFailure = reject; });
   failure.catch(() => {});
   child.on('error', rejectFailure);
+  processState = { ...processState, phase: 'spawned', pid: child.pid || null, spawnedAt: new Date().toISOString() };
+  try { options.onProcess?.(processState); }
+  catch (cause) { stopChild(); rejectFailure(cause); }
   child.stdin.on('error', (cause) => { if (cause.code !== 'EPIPE') rejectFailure(cause); });
   log.on('error', (cause) => rejectFailure(cause));
   const writeLog = (event) => log.write(`${redact(JSON.stringify(event))}\n`);
@@ -332,7 +366,8 @@ export async function executeDsh(member, prompt, options) {
     }
     child.stdin.end();
     if (!closed) await Promise.race([exited, sleep(2000)]);
-    if (!closed) { killChild(child); await exited; }
+    if (!closed) { stopChild(); await exited; }
+    try { supervised?.cleanup(); } catch (cause) { warnings.push('进程监督临时记录未能清理'); }
     writeLog({ type: 'result', sessionId, stopReason, error, riskFlags: [...flags], warnings, diagnostics });
     await new Promise((resolve) => log.end(resolve));
     if (runtime.recovery) {
@@ -345,6 +380,6 @@ export async function executeDsh(member, prompt, options) {
     success: !error && flags.size === 0 && child.exitCode === 0 && (prompt === null || stopReason === 'end_turn'),
     response: redact(response), report, conversationId: sessionId, usage, capabilities,
     riskFlags: [...flags], warnings, error, exitCode: child.exitCode, diagnostics,
-    cancelled: Boolean(options.signal?.aborted), timedOut,
+    cancelled: Boolean(options.signal?.aborted), timedOut, processExitConfirmed: exitProof.confirmed, processExitEvidence: exitProof,
   };
 }

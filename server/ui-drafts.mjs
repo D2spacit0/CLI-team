@@ -8,6 +8,11 @@ const fail = (message, status = 400) => { throw Object.assign(new Error(message)
 const identifier = z.string().min(1).max(200).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.:@-]*$/);
 const optionalIdentifier = z.union([identifier, z.literal('')]);
 const scopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('new-project') }).strict(),
+  z.object({ kind: z.literal('project-message'), projectId: identifier }).strict(),
+  z.object({ kind: z.literal('project-brief'), projectId: identifier }).strict(),
+  z.object({ kind: z.literal('project-fact'), projectId: identifier }).strict(),
+  z.object({ kind: z.literal('content-revision-request'), contentId: identifier, versionId: identifier }).strict(),
   z.object({ kind: z.literal('new-task'), contextId: identifier.default('default') }).strict(),
   z.object({ kind: z.literal('room-create') }).strict(),
   z.object({ kind: z.literal('meeting-create'), roomId: identifier }).strict(),
@@ -39,6 +44,15 @@ const materialListSchema = z.array(materialSchema).max(materialLimits.maxFiles)
   .refine((items) => new Set(items.map((item) => item.id)).size === items.length &&
     new Set(items.map((item) => item.name.toLowerCase())).size === items.length, '材料记录重复');
 const fieldSchemas = {
+  'new-project': z.object({ name: text(100), objective: text(6000), brief: text(12000), ownerId: optionalIdentifier,
+    reviewerId: optionalIdentifier, memberIds: jsonText(z.array(identifier).max(20), 6000), timeZone: text(100),
+    requestId: z.union([z.string().uuid(), z.literal('')]) }).partial().strict(),
+  'project-message': z.object({ body: text(12000), recipientId: optionalIdentifier,
+    requestId: z.union([z.string().uuid(), z.literal('')]) }).partial().strict(),
+  'project-brief': z.object({ objective: text(6000), brief: text(12000), expectedRevision: text(30) }).partial().strict(),
+  'project-fact': z.object({ content: text(10000), type: z.enum(['fact', 'judgment', 'preference']), source: text(2000),
+    requestId: z.union([z.string().uuid(), z.literal('')]) }).partial().strict(),
+  'content-revision-request': z.object({ feedback: text(6000), requestId: z.union([z.string().uuid(), z.literal('')]) }).partial().strict(),
   'new-task': z.object({ title: text(1000), objective: text(24000), requirements: text(36000), verificationCommand: text(12000),
     executionMode: z.enum(['direct', 'delegated']), assigneeId: optionalIdentifier, reviewerId: optionalIdentifier,
     participantIds: jsonText(z.array(identifier).max(4).refine((ids) => new Set(ids).size === ids.length), 1200),
@@ -75,7 +89,12 @@ export class UiDrafts {
     const scope = parsed.scope;
     if (scope.kind === 'room-message' || scope.kind === 'managed-request' || scope.kind === 'meeting-create') {
       if (!this.service.store.get('rooms', scope.roomId)) fail('草稿对应的聊天室不存在', 404);
-    } else if (scope.kind !== 'new-task' && scope.kind !== 'room-create') {
+    } else if (['project-message', 'project-brief', 'project-fact'].includes(scope.kind)) {
+      if (!this.service.store.get('projects', scope.projectId)) fail('草稿对应的项目不存在', 404);
+    } else if (scope.kind === 'content-revision-request') {
+      const revision = this.service.store.get('contentRevisions', scope.versionId);
+      if (!revision || revision.contentId !== scope.contentId) fail('草稿对应的稿件版本不存在', 404);
+    } else if (!['new-task', 'room-create', 'new-project'].includes(scope.kind)) {
       if (!this.service.store.get('tasks', scope.taskId)) fail('草稿对应的任务不存在', 404);
       if (scope.kind === 'assistance') {
         const help = this.service.store.get('assistance', scope.questionId);

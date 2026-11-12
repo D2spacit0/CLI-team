@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>Windows 中文桌面工作台</strong> · 多 CLI 协作 · 依赖编排 · 独立评审 · 本地交付证据
+  <strong>Windows 中文桌面工作台</strong> · 项目会话 · 多 CLI 接力 · 独立验收 · 固定成果版本
 </p>
 
 <p align="center">
@@ -15,13 +15,38 @@
   <img alt="数据保存在本地" src="https://img.shields.io/badge/数据-保存在本地-7c3aed?style=for-the-badge">
 </p>
 
-> 用一个目标调动多个官方 CLI。主控负责拆解、派工、返工与终审，工作台负责依赖编排、机器检查和证据留存。
+> 用一个目标调动多个官方 CLI。在同一项目中交代要求、查看团队接力、审阅完整成果；负责人安排派工与返工，程序保存版本和证据，最终发布由你确认。
+
+当前源码包含 **2026-11-12 项目协作升级与科幻工作台改版**。深色指挥台把项目交接、负责人通讯和固定整稿放在同一工作面；GitHub 的既有 `v0.1.0` 下载包不代表已包含本轮变化。最新验证范围见[改版记录](docs/validation/2026-11-12-scifi-workbench.md)，底层协作与恢复规则见[业务升级记录](docs/validation/2026-11-12-team-upgrade.md)。
 
 ## 一张图看懂
 
 <p align="center">
-  <img src="docs/assets/workbench.webp" alt="CLI Team 主工作台：聊天协作、任务看板和运行状态" width="100%">
+  <img src="docs/assets/scifi-workbench-20261112.png" alt="CLI Team 科幻工作台演练：项目索引、可定位的交接阶段、负责人通讯与固定整稿审阅" width="100%">
 </p>
+
+截图使用明确标注的演练数据。阶段数量来自项目工作记录，可点击定位具体交接；真实工作中的成员执行、程序收件与独立审稿分别留证。
+
+## 本轮升级
+
+| 参考项目 | 在 CLI Team 中落实的能力 |
+| --- | --- |
+| [solo-to-team-skills](https://github.com/dabingfy-dot/solo-to-team-skills/tree/bc9c19458e9d4afe42e506fc65673a68c26c6a56) | 派工登记执行人、收件人、跟进责任和原承诺；实际收件后再独立验收；失败和退回保持未完；新计划保留同一责任工作已用次数。 |
+| [LibreChat](https://github.com/LibreChat-AI/LibreChat/tree/e6567c7a681ce67869dce31486a21d3a25d6931b) | 项目、会话、执行活动和成果并排；折叠活动后仍显示阻碍；项目内搜索定位消息、交接与版本；借鉴持久作业、去重和恢复边界。 |
+
+CLI Team 继续使用现有 Node、SQLite、React 和官方 CLI 执行层；本轮重新实现所需规则与交互，未整体迁入上游运行平台。内置协作规范有版本和摘要，随固定输入交给成员，不能增加执行权限。
+
+项目工作从 `已派发 → 本机接纳 → 实际收件 → 独立验收` 推进。普通后继只在上游验收通过后启动；接收方必须核对相同代次的固定收件。计划退回会结束旧分工；快速暂停后继续、咨询失败重试和迟到结果都有明确处理。
+
+## 使用项目工作台
+
+1. 在成员设置中配置已登录的官方 CLI，选择负责人、执行成员和不同的独立审稿成员。能找到程序不代表模型调用已验证。
+2. 打开“项目”并新建长期目标。首个业务模块面向一个小红书账号的图文生产，可以先准备内容再绑定账号。
+3. 在负责人通讯区补充要求和反馈；点击顶部交接阶段定位工作，右侧查看资料、团队或整稿。切换稿件保留会话与输入草稿，搜索可定位历史版本。
+4. 查看完整正文、有序配图、来源和独立审稿。需要修改时退回当前固定版本，团队生成新稿后重新核验。
+5. 发布条件全部满足后，在桌面原生确认框批准这份稿件。账号、版本、图片顺序或发布时间范围改变后需重新批准；结果不确定时先核实。
+
+负责人协调、接收核验、审稿和返工共用每日调用额度，默认最多 24 次；每项责任工作最多 3 次尝试。应用运行时推进有效项目，关机或关闭程序期间不会执行。模板图在本地生成真实 PNG，AI 生图尚未配置。真实平台发布仍需账号及连接器现场核验，详见升级验证记录。
 
 ## 你可以用它做什么
 
@@ -184,6 +209,16 @@ MCP 使用 stdio，示例配置：
 
 常用 MCP 工具：`team_configure_controller`、`team_submit_objective`、`team_message`、`team_task`、`team_progress`、`team_answer_assistance`、`team_materials`、`team_evidence`、`team_decide`。
 
+业务项目使用 `team_business_state`、`team_project_create`、`team_project_message`、`team_project_fact`、`team_project_material`、`team_content_preview`、`team_content_revision_request`。写入请求带稳定 `requestId`；主控提交的事实等待负责人采纳，素材保留主控来源；整稿通过固定版本分页读取。MCP 和 CLI 不提供发布批准。
+
+```powershell
+node tools/team.mjs business-state
+node tools/team.mjs business-state PROJECT_ID --section work
+node tools/team.mjs project-message PROJECT_ID --request-id REQUEST_ID --body "请补充来源与适用范围"
+node tools/team.mjs content-preview CONTENT_ID --version VERSION_ID --section text
+node tools/team.mjs content-revise CONTENT_ID --version VERSION_ID --request-id REQUEST_ID --feedback "配图与正文步骤需要统一"
+```
+
 项目 skill 位于 [`skills/cli-team-controller/SKILL.md`](skills/cli-team-controller/SKILL.md)，不会自动安装到全局技能目录。
 
 </details>
@@ -226,6 +261,8 @@ npm run smoke:desktop -- --packaged
 ## 已知限制
 
 - 当前桌面发行包仅提供 Windows x64。
+- Windows 成员进程树由 Job Object 监督器管理，首次使用需系统自带的 .NET Framework 编译器。缺失时会在启动成员前明确失败；不退回未经监督的执行。
+- 旧版工作区升级前须停止原服务与排队任务。升级会生成数据库及工作文件快照，新版写入后旧版不能直接写同一数据库；恢复旧版应使用独立目录，不能覆盖升级后的工作区。
 - 程序未进行代码签名，Windows 可能显示 SmartScreen 提示。
 - 官方 CLI 需要自行安装、登录并承担相应额度。
 - 当前 Codex 对话不会因为本地服务运行而全天候在线，也没有安装开机自启或定时唤醒。

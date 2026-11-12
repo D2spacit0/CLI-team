@@ -94,6 +94,20 @@ export class BackendHost extends EventEmitter {
     });
     child.on('message', (message) => {
       if (!message || typeof message !== 'object' || state.closed) return;
+      if (message.type === 'content:render' && typeof message.id === 'string' && message.id.startsWith('backend-content-')) {
+        void (async () => {
+          try {
+            if (!this.contentRenderer || state.stopping) throw new Error('桌面图文渲染能力当前不可用。');
+            const result = await this.contentRenderer(message.spec);
+            if (!Buffer.isBuffer(result?.buffer) || result.buffer.length > 15 * 1024 * 1024) throw new Error('图文渲染图片无效或超过大小限制。');
+            const { buffer, ...metadata } = result;
+            if (!state.closed && child.connected) child.send({ type: 'content:render-result', id: message.id, result: { ...metadata, png: buffer.toString('base64') } });
+          } catch (error) {
+            if (!state.closed && child.connected) child.send({ type: 'content:render-result', id: message.id, error: String(error.message).slice(0, 1000) });
+          }
+        })();
+        return;
+      }
       const pending = this.pending.get(message.id);
       if (pending?.state === state) {
         if (message.type === 'busy' || message.type === 'error') {
@@ -140,7 +154,7 @@ export class BackendHost extends EventEmitter {
         this.pending.delete(id);
         action(value);
       };
-      const timeout = setTimeout(() => settle(reject, new Error('本地服务响应超时。')), REQUEST_TIMEOUT);
+      const timeout = setTimeout(() => settle(reject, new Error('本地服务响应超时。')), type === 'publication:login' ? 60000 : REQUEST_TIMEOUT);
       this.pending.set(id, { state, resolve: (value) => settle(resolve, value), reject: (error) => settle(reject, error) });
       try {
         state.child.send({ ...extra, id, type }, (error) => { if (error) this.pending.get(id)?.reject(error); });

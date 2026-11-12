@@ -1,0 +1,274 @@
+/* A fixed manuscript, its evidence, and human authorization occupy distinct layers. */
+.business-content-workbench.content-review-dock {
+  --dock-border: color-mix(in srgb, var(--wb-muted) 23%, transparent);
+  --dock-rule: color-mix(in srgb, var(--wb-muted) 13%, transparent);
+  background: var(--wb-background);
+  color: var(--wb-text);
+  color-scheme: dark;
+}
+
+.content-review-dock .business-content-header {
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 18px 22px;
+  background: var(--wb-surface-subtle);
+  border-bottom: 1px solid var(--dock-border);
+  box-shadow: none;
+}
+
+.content-review-dock .business-content-breadcrumb { gap: 12px; flex-wrap: wrap; }
+.content-review-dock .business-content-breadcrumb > div { min-width: 0; }
+.content-review-dock .business-content-breadcrumb > div > span {
+  display: block;
+  color: var(--wb-muted);
+  font-size: 10px;
+  letter-spacing: .04em;
+  overflow-wrap: anywhere;
+}
+.content-review-dock .business-content-breadcrumb h1 {
+  margin-top: 3px;
+  color: var(--wb-text);
+  font: 600 18px/1.5 "Bahnschrift", "Microsoft YaHei UI", sans-serif;
+  letter-spacing: .03em;
+}
+.content-review-dock .business-content-breadcrumb > .business-badge { margin-left: 0; }
+.content-review-dock .business-header-actions { margin-left: auto; gap: 7px; }
+.content-review-dock .business-version-select {
+  width: 150px;
+  max-width: 100%;
+  min-height: 34px;
+  border-color: var(--dock-border);
+  background-color: var(--wb-background);
+  color: var(--wb-text);
+  font-size: 11px;
+}
+.content-review-dock .business-content-scroll { padding: 22px; scrollbar-color: var(--dock-border) transparent; }
+.content-review-dock .business-content-columns { grid-template-columns: minmax(0, 1fr) 326px; gap: 18px; }
+.content-review-dock .business-proof-sheet {
+  width: 100%;
+  padding: 26px;
+  background: var(--wb-surface-subtle);
+  border: 1px solid var(--dock-border);
+  border-top: 2px solid color-mix(in srgb, var(--wb-accent) 55%, var(--wb-surface-subtle));
+  border-radius: 4px;
+  box-shadow: none;
+}
+.content-review-dock .business-proof-label {
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-color: var(--dock-rule);
+  color: var(--wb-muted);
+  font-size: 10px;
+}
+.content-review-dock .business-proof-label > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 3px;
+  color: var(--wb-accent);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.content-review-dock .content-version-stamp { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; text-align: right; }
+.content-review-dock .content-version-stamp b {
+  color: var(--wb-text);
+  font: 500 11px/1.5 var(--wb-font-mono, "Cascadia Code", Consolas, monospace);
+}
+.content-review-dock .content-version-stamp time { color: var(--wb-muted); font-variant-numeric: tabular-nums; }
+.content-review-dock .business-proof-sheet > h2 {
+  margin: 0 0 22px;
+  color: var(--wb-text);
+  font-size: 23px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: .015em;
+}
+.content-review-dock .business-image-strip { gap: 12px; margin-bottom: 25px; }
+.content-review-dock .business-image-button {
+  border: 1px solid var(--dock-border);
+  border-radius: 3px;
+  background: var(--wb-background);
+  box-shadow: none;
+}
+.content-review-dock .business-image-button:hover { border-color: var(--wb-accent); }
+.content-review-dock .business-image-button img { background: var(--wb-background); object-fit: contain; }
+.content-review-dock .business-image-strip figcaption {
+  padding-top: 8px;
+  color: var(--wb-muted);
+  font-size: 10px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.content-review-dock .business-image-strip figcaption > span:first-child { font-family: var(--wb-font-mono, "Cascadia Code", Consolas, monospace); }
+.content-review-dock .content-body-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+  padding-top: 17px;
+  border-top: 1px solid var(--dock-rule);
+  color: var(--wb-muted);
+  font-size: 10px;
+  letter-spacing: .05em;
+}
+.content-review-dock .content-body-heading > span:last-child { font-family: var(--wb-font-mono, "Cascadia Code", Consolas, monospace); }
+.content-review-dock .business-payload-body { margin-top: 0; color: var(--wb-text); font-size: 14px; line-height: 2.05; }
+.content-review-dock .business-content-tags { color: var(--wb-accent); font-size: 12px; line-height: 1.8; margin-top: 20px; }
+.content-review-dock .business-proof-footer { margin-top: 24px; padding-top: 17px; border-color: var(--dock-rule); color: var(--wb-muted); line-height: 1.7; }
+
+.content-review-dock .business-content-inspection {
+  width: 100%;
+  border: 1px solid var(--dock-border);
+  border-radius: 4px;
+  background: var(--wb-surface);
+}
+.content-review-dock .business-publish-scope { padding: 18px; border-color: var(--dock-border); background: var(--wb-surface-subtle); }
+.content-review-dock .business-publish-scope h2 { font-size: 12px; color: var(--wb-text); letter-spacing: .04em; }
+.content-review-dock .business-publish-scope dl { display: grid; gap: 11px; margin: 15px 0; }
+.content-review-dock .business-publish-scope dl > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; margin: 0; font-size: 11px; }
+.content-review-dock .business-publish-scope dt { width: auto; color: var(--wb-muted); }
+.content-review-dock .business-publish-scope dd { color: var(--wb-text); }
+.content-review-dock .business-publish-scope .business-text-button { font-size: 11px; line-height: 1.6; }
+.content-review-dock .business-inspection-tabs { padding: 0 12px; gap: 7px; border-color: var(--dock-border); background: var(--wb-surface-subtle); }
+.content-review-dock .business-inspection-tabs button { min-height: 42px; padding: 12px 3px; color: var(--wb-muted); font-size: 11px; white-space: nowrap; }
+.content-review-dock .business-inspection-tabs button:hover { color: var(--wb-text); }
+.content-review-dock .business-inspection-tabs button[aria-selected='true'] { color: var(--wb-accent); border-bottom-color: var(--wb-accent); }
+.content-review-dock .business-inspection-content { padding: 0 18px; }
+.content-review-dock .business-evidence-section { padding: 19px 0; border-color: var(--dock-border); }
+.content-review-dock .content-evidence-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.content-review-dock .content-evidence-heading h3 { margin: 0; color: var(--wb-text); font-size: 12px; }
+.content-review-dock .content-evidence-heading > span { color: var(--wb-muted); font-size: 11px; letter-spacing: .04em; }
+.content-review-dock .business-evidence-section[data-evidence='machine'] .content-evidence-heading svg { color: var(--wb-accent); }
+.content-review-dock .business-evidence-section[data-evidence='machine'] > .business-badge.ready {
+  color: var(--wb-accent);
+  background: color-mix(in srgb, var(--wb-accent) 7%, transparent);
+  border-color: color-mix(in srgb, var(--wb-accent) 23%, transparent);
+}
+.content-review-dock .business-evidence-section[data-evidence='agent'] > .business-badge.ready {
+  color: var(--wb-text);
+  background: var(--wb-surface-subtle);
+  border-color: var(--dock-border);
+}
+.content-review-dock .business-evidence-section[data-evidence='approval'] .content-evidence-heading svg { color: var(--wb-warning); }
+.content-review-dock .business-evidence-section[data-evidence='approval'] > .business-badge.ready {
+  color: var(--wb-warning);
+  background: color-mix(in srgb, var(--wb-warning) 6%, transparent);
+  border-color: color-mix(in srgb, var(--wb-warning) 25%, transparent);
+}
+.content-review-dock .business-evidence-section > .business-muted { margin-top: 10px; color: var(--wb-muted); font-size: 11px; line-height: 1.75; }
+.content-review-dock .business-review-entry { padding-top: 14px; margin-top: 14px; border-color: var(--dock-rule); }
+.content-review-dock .business-review-entry > div { flex-wrap: wrap; }
+.content-review-dock .business-review-entry > div > strong { color: var(--wb-text); font-size: 11px; }
+.content-review-dock .business-review-entry > div > span { color: var(--wb-muted); font-size: 10px; }
+.content-review-dock .business-review-entry > p { color: var(--wb-text-secondary, var(--wb-text)); font-size: 12px; line-height: 1.85; }
+.content-review-dock .business-review-approved { color: var(--wb-text); border-left: 2px solid var(--dock-border); padding-left: 8px; font-size: 10px; }
+.content-review-dock .business-review-entry > .business-muted { color: var(--wb-muted); font-size: 10px; }
+.content-review-dock .business-review-entry > .business-check-issue { color: var(--wb-warning); }
+.content-review-dock .business-check-issue { color: var(--wb-warning); }
+.content-review-dock .business-empty-inline { color: var(--wb-muted); font-size: 11px; line-height: 1.8; }
+.content-review-dock .business-version-row { min-height: 41px; border-radius: 2px; color: var(--wb-text); gap: 6px; }
+.content-review-dock .business-version-row.active { color: var(--wb-accent); background: color-mix(in srgb, var(--wb-accent) 7%, transparent); }
+.content-review-dock .business-version-row > span { color: var(--wb-muted); font-size: 10px; }
+.content-review-dock .business-text-diff del { color: var(--wb-danger); background: var(--wb-danger-bg); }
+.content-review-dock .business-text-diff ins { color: var(--wb-accent); background: color-mix(in srgb, var(--wb-accent) 6%, transparent); }
+.content-review-dock .business-body-diff > div { background: var(--wb-surface-subtle); border: 1px solid var(--dock-rule); }
+.content-review-dock .business-adopted-materials li { border-color: var(--dock-rule); }
+.content-review-dock .business-peer-answer { background: var(--wb-surface-subtle); border-left-color: var(--dock-border); }
+
+.content-review-dock .business-reconcile-panel,
+.content-review-dock .business-revision-form { background: var(--wb-surface); border-color: var(--dock-border); border-radius: 4px; padding: 20px; }
+.content-review-dock .business-reconcile-panel { border-left: 2px solid var(--wb-warning); }
+.content-review-dock .business-reconcile-panel h2 { font-size: 13px; }
+.content-review-dock .business-reconcile-panel p { line-height: 1.85; }
+.content-review-dock .business-form-actions { gap: 12px; flex-wrap: wrap; }
+.content-review-dock .business-schedule-form { border-color: var(--dock-border); }
+.content-review-dock .form-input,
+.content-review-dock .form-textarea,
+.content-review-dock .form-select { color: var(--wb-text); border-color: var(--dock-border); background-color: var(--wb-background); }
+.content-review-dock :is(.form-input, .form-textarea)::placeholder { color: var(--wb-muted); }
+.content-review-dock .form-label { color: var(--wb-text); }
+.content-review-dock .business-publication-actions {
+  position: relative;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 22px;
+  background: var(--wb-surface-subtle);
+  border-top: 1px solid var(--dock-border);
+  box-shadow: 0 -10px 25px color-mix(in srgb, var(--wb-background) 35%, transparent);
+}
+.content-review-dock .content-authorization-label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--wb-warning); font-size: 10px; letter-spacing: .06em; }
+.content-review-dock .business-publication-actions strong { color: var(--wb-text); font-size: 12px; font-weight: 600; }
+.content-review-dock .business-publication-actions p { color: var(--wb-muted); font-size: 11px; line-height: 1.75; }
+.content-review-dock .business-action-buttons { gap: 8px; flex-wrap: wrap; max-width: none; }
+.content-review-dock .business-approve-button.btn {
+  min-height: 40px;
+  padding: 10px 17px;
+  color: var(--wb-background);
+  background: var(--wb-accent);
+  border: 1px solid var(--wb-accent);
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.content-review-dock .business-approve-button.btn:hover:not(:disabled) { background: color-mix(in srgb, var(--wb-accent) 85%, var(--wb-text)); }
+.content-review-dock .business-approve-button.btn:disabled { opacity: 1; color: var(--wb-muted); background: var(--wb-surface); border-color: var(--dock-border); cursor: not-allowed; }
+.content-review-dock :is(button, select, input, textarea, summary, a):focus-visible { outline: 2px solid var(--wb-accent); outline-offset: 3px; }
+.content-review-dock .business-content-not-ready { min-height: 300px; padding: 35px 22px; color: var(--wb-muted); }
+.content-review-dock .business-content-not-ready > svg { color: var(--wb-accent); }
+.content-review-dock .business-content-not-ready h2 { color: var(--wb-text); font-size: 17px; }
+.content-review-dock .business-content-not-ready p { max-width: 300px; line-height: 1.9; }
+.business-lightbox.content-image-lightbox { background: color-mix(in srgb, var(--wb-background) 98%, transparent); color: var(--wb-text); padding: 24px; }
+.content-image-lightbox header { border-bottom: 1px solid var(--wb-border); padding-bottom: 16px; }
+.content-image-lightbox footer { color: var(--wb-muted); }
+
+.content-review-dock.team-embedded-manuscript .business-content-header { padding: 16px; background: var(--wb-surface-subtle); }
+.content-review-dock.team-embedded-manuscript .business-content-breadcrumb h1 { font-size: 15px; }
+.content-review-dock.team-embedded-manuscript .business-content-breadcrumb > .btn { min-height: 30px; width: 30px; height: 30px; }
+.content-review-dock.team-embedded-manuscript .business-header-actions > button { min-height: 32px; width: 32px; height: 32px; }
+.content-review-dock.team-embedded-manuscript .business-version-select { max-width: 150px; font-size: 11px; }
+.content-review-dock.team-embedded-manuscript .business-content-scroll { padding: 16px; }
+.content-review-dock.team-embedded-manuscript .business-content-columns { display: flex; flex-direction: column; gap: 16px; }
+.content-review-dock.team-embedded-manuscript .business-proof-sheet { padding: 21px; border-radius: 4px; }
+.content-review-dock.team-embedded-manuscript .business-proof-sheet h2 { margin: 0 0 20px; font-size: 20px; }
+.content-review-dock.team-embedded-manuscript .business-image-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.content-review-dock.team-embedded-manuscript .business-image-strip img { background: var(--wb-background); }
+.content-review-dock.team-embedded-manuscript .business-payload-body { margin-top: 0; font-size: 13px; line-height: 2; }
+.content-review-dock.team-embedded-manuscript .business-proof-footer { font-size: 10px; }
+.content-review-dock.team-embedded-manuscript .business-publish-scope dl { display: grid; }
+.content-review-dock.team-embedded-manuscript .business-publication-actions { padding: 16px; align-items: stretch; flex-direction: column; gap: 13px; }
+.content-review-dock.team-embedded-manuscript .business-action-buttons { width: 100%; gap: 8px; }
+.content-review-dock.team-embedded-manuscript .business-action-buttons .business-approve-button { padding: 10px 14px; font-size: 12px; }
+
+@media (max-width: 1200px) {
+  .content-review-dock .business-content-columns { grid-template-columns: minmax(0, 1fr); }
+  .content-review-dock .business-publication-actions { flex-direction: column; align-items: stretch; gap: 14px; }
+  .content-review-dock .business-action-buttons { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .content-review-dock .business-content-header { padding: 13px; gap: 10px; }
+  .content-review-dock .business-content-breadcrumb { gap: 9px; }
+  .content-review-dock .business-content-breadcrumb h1 { font-size: 15px; }
+  .content-review-dock .business-content-scroll { padding: 13px; }
+  .content-review-dock .business-proof-sheet { padding: 18px; }
+  .content-review-dock .business-proof-sheet > h2 { font-size: 20px; }
+  .content-review-dock .business-image-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .content-review-dock .business-proof-label { flex-wrap: wrap; }
+  .content-review-dock .content-version-stamp { flex-direction: row; align-items: center; gap: 10px; flex-wrap: wrap; text-align: left; }
+  .content-review-dock .business-payload-body { font-size: 13px; }
+  .content-review-dock .business-inspection-content { padding: 0 15px; }
+  .content-review-dock .business-publication-actions { padding: 14px; }
+  .content-review-dock .business-action-buttons > .business-approve-button { flex: 1 0 100%; }
+  .content-review-dock .business-reconcile-form { flex-direction: column; }
+  .content-review-dock .business-revision-form,
+  .content-review-dock .business-reconcile-panel { padding: 16px; }
+}
+
+@media (max-width: 480px) {
+  .business-lightbox.content-image-lightbox { padding: 14px; }
+  .content-image-lightbox header { font-size: 12px; }
+  .content-image-lightbox footer { gap: 12px; font-size: 11px; }
+}

@@ -3,6 +3,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { request, compact } from './client.mjs';
 import { importLocalMaterial } from './materials.mjs';
+import { businessSchemas, readBusinessState, createBusinessProject, sendBusinessMessage, submitBusinessFact,
+  importBusinessMaterial, previewBusinessContent, requestBusinessRevision } from './business-client.mjs';
 
 const server = new McpServer({ name: 'cli-team', version: '0.1.0' });
 function tool(name, description, shape, handler) {
@@ -97,4 +99,19 @@ tool('team_decide', 'Start, pause, accept, revise or cancel a task. Pause preser
 }, ({ id, action, note, acknowledgeMissingGate }) => request(
   `/api/${id.startsWith('task-') ? 'tasks' : id.startsWith('room-') ? 'rooms' : 'runs'}/${encodeURIComponent(id)}/${action}`,
   action === 'accept' ? { note, acknowledgeMissingGate } : action === 'revise' ? { feedback: note } : action === 'pause' ? { note } : {}));
+
+tool('team_business_state', '分页读取业务项目、工作、收件、验收回执、协作消息、资料或稿件列表。通过 projectId 隔离项目；省略时按所选 section 列出全部。成员声称完成与实际收件、机器检查、独立验收分开。',
+  businessSchemas.state.shape, readBusinessState);
+tool('team_project_create', '创建持续业务项目并将目标交给现有 CLI 成员。需要独立审稿成员；start:false 先保存项目。必须显式传 requestId，重试复用原始内容和 ID。不会批准发布。',
+  businessSchemas.createProject.shape, createBusinessProject);
+tool('team_project_message', '向项目负责人或指定授权成员提交一条有 requestId 的业务交代，返回协作线程和工作项。重试不会重复派工。',
+  businessSchemas.message.shape, sendBusinessMessage);
+tool('team_project_fact', '提交事实、判断或偏好供项目负责人核对。MCP 提交始终保留 agent_claim 来源，不能冒充用户已采纳事实；不接受 actor 或 adopt 字段。重试复用 requestId。',
+  businessSchemas.fact.shape, submitBusinessFact);
+tool('team_project_material', '导入用户明确选定的单个 PNG、JPEG 或文本素材；file 必须来自用户授权，不能扫描目录或选择客户端配置、凭据、链接。只返回哈希与素材元数据。重试复用 requestId。',
+  businessSchemas.material.shape, importBusinessMaterial);
+tool('team_content_preview', '读取固定整稿。先读 summary 取得 versionId，再携带该版本分页读取 text/tags/images/sources/checks/reviews。成员审稿与机器检查是独立证据；此工具只预览，不能进行桌面发布批准。',
+  businessSchemas.preview.shape, previewBusinessContent);
+tool('team_content_revision_request', '对已查看的固定 versionId 提交具体退回意见，生成返工线程并重新检查新稿；旧版本会被拒绝。重试复用 requestId，不改变发布批准边界。',
+  businessSchemas.requestRevision.shape, requestBusinessRevision);
 await server.connect(new StdioServerTransport());

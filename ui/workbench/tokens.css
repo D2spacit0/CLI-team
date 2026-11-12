@@ -1,58 +1,63 @@
-/* CLI Team Workbench Design Tokens (2026-10-13 视觉美化版) */
+/* Orbital workbench: shared surfaces, readable Chinese copy, semantic state colors. */
 :root {
-  --wb-background: #F3F6FA;
-  --wb-surface: #FFFFFF;
-  --wb-surface-subtle: #F8FAFF;
-  --wb-surface-hover: #F0F4FA;
-  --wb-surface-active: #E8EEF8;
-  --wb-text: #172B4D;
-  --wb-text-secondary: #3D4E68;
-  --wb-muted: #53657D;
-  --wb-border: #DCE4EE;
-  --wb-border-subtle: #E8EEF5;
-  --wb-border-focus: #2862D7;
+  color-scheme: dark;
+  --wb-background: #080f1b;
+  --wb-surface: #101e30;
+  --wb-surface-subtle: #0c1727;
+  --wb-surface-hover: #182c42;
+  --wb-surface-active: #17364a;
+  --wb-text: #e2edf8;
+  --wb-text-secondary: #afc0d5;
+  --wb-muted: #8b9fb8;
+  --wb-border: #2b4058;
+  --wb-border-subtle: #213247;
+  --wb-border-focus: #65e5ee;
 
-  --wb-accent: #2862D7;
-  --wb-accent-hover: #204FAB;
-  --wb-accent-active: #183C85;
-  --wb-accent-subtle: #EDF3FF;
-  --wb-accent-border: #B3CAFA;
+  --wb-accent: #65e5ee;
+  --wb-accent-hover: #96eff4;
+  --wb-accent-active: #37c3d0;
+  --wb-accent-subtle: #102f3e;
+  --wb-accent-border: #2b7582;
+  --wb-on-accent: #071923;
 
   /* 状态颜色：成功、等待、失败 */
-  --wb-success: #1B7A55;
-  --wb-success-hover: #156244;
-  --wb-success-bg: #EDF7F1;
-  --wb-success-border: #BCE2CC;
+  --wb-success: #75d8b1;
+  --wb-success-hover: #a1e9cc;
+  --wb-success-bg: #132e2c;
+  --wb-success-border: #2d6254;
 
-  --wb-warning: #9B6500;
-  --wb-warning-hover: #7E5200;
-  --wb-warning-bg: #FFF8EA;
-  --wb-warning-border: #F7E0AD;
+  --wb-warning: #ffbe73;
+  --wb-warning-hover: #ffd5a2;
+  --wb-warning-bg: #33291f;
+  --wb-warning-border: #695039;
 
-  --wb-danger: #BF3D3D;
-  --wb-danger-hover: #A13232;
-  --wb-danger-bg: #FFF4F3;
-  --wb-danger-border: #F8CBC9;
+  --wb-danger: #ff94a8;
+  --wb-danger-hover: #ffb9c6;
+  --wb-danger-bg: #352332;
+  --wb-danger-border: #754154;
+  --wb-violet: #b5b6ff;
+  --wb-violet-bg: #28283f;
 
   /* 字体系统 */
-  --wb-font-sans: "Microsoft YaHei UI", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --wb-font-sans: "Microsoft YaHei UI", "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --wb-font-display: "Bahnschrift", "DIN Alternate", "Microsoft YaHei UI", "PingFang SC", sans-serif;
   --wb-font-mono: "Cascadia Code", Consolas, "Courier New", monospace;
   --wb-line-height-normal: 1.65;
 
   /* 间距与圆角 */
-  --wb-radius-xs: 4px;
-  --wb-radius-sm: 6px;
+  --wb-radius-xs: 3px;
+  --wb-radius-sm: 5px;
   --wb-radius-md: 8px;
-  --wb-radius-lg: 12px;
+  --wb-radius-lg: 10px;
   --wb-radius-pill: 9999px;
 
   /* 阴影系统：微层次、悬浮、抽屉 */
-  --wb-shadow-xs: 0 1px 2px rgba(23, 43, 77, 0.04);
-  --wb-shadow-card: 0 1px 3px rgba(23, 43, 77, 0.05), 0 1px 2px rgba(23, 43, 77, 0.03);
-  --wb-shadow-card-hover: 0 4px 12px rgba(23, 43, 77, 0.08), 0 1px 3px rgba(23, 43, 77, 0.04);
-  --wb-shadow-drawer: -6px 0 24px rgba(23, 43, 77, 0.10);
-  --wb-shadow-popover: 0 4px 16px rgba(23, 43, 77, 0.10);
-  --wb-shadow-focus: 0 0 0 3px rgba(40, 98, 215, 0.16);
+  --wb-shadow-xs: 0 1px 2px rgb(0 0 0 / 16%);
+  --wb-shadow-card: 0 3px 10px rgb(0 0 0 / 16%);
+  --wb-shadow-card-hover: 0 8px 24px rgb(0 0 0 / 24%);
+  --wb-shadow-drawer: -12px 0 40px rgb(0 0 0 / 35%);
+  --wb-shadow-popover: 0 12px 36px rgb(0 0 0 / 35%);
+  --wb-shadow-focus: 0 0 0 3px rgb(101 229 238 / 18%);
 
   /* 动效过渡 */
   --wb-ease-out: cubic-bezier(0.16, 1, 0.3, 1);

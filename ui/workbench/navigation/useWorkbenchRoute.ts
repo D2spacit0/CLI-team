@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 
 export type WorkbenchView =
+  | 'projects'
+  | 'publications'
   | 'rooms'
   | 'tasks'
   | 'members'
@@ -16,9 +18,17 @@ export interface RouteState {
   roomId: string | null;
   taskId: string | null;
   panel: string | null;
+  projectId?: string | null;
+  contentId?: string | null;
+  versionId?: string | null;
+  focusId?: string | null;
 }
 
 interface NavigateOptions {
+  projectId?: string | null;
+  contentId?: string | null;
+  versionId?: string | null;
+  focusId?: string | null;
   roomId?: string | null;
   taskId?: string | null;
   panel?: string | null;
@@ -36,6 +46,8 @@ export function routeHash(view: WorkbenchView, options?: Omit<NavigateOptions, '
     hash += `/${encodeURIComponent(options.roomId)}`;
   } else if (view === 'tasks' && options?.taskId) {
     hash += `/${encodeURIComponent(options.taskId)}`;
+  } else if (view === 'projects' && options?.projectId) {
+    hash += `/${encodeURIComponent(options.projectId)}`;
   }
 
   const queryParts: string[] = [];
@@ -45,6 +57,10 @@ export function routeHash(view: WorkbenchView, options?: Omit<NavigateOptions, '
   if (options?.panel) {
     queryParts.push(`panel=${encodeURIComponent(options.panel)}`);
   }
+  if (options?.contentId) queryParts.push(`content=${encodeURIComponent(options.contentId)}`);
+  if (options?.versionId) queryParts.push(`version=${encodeURIComponent(options.versionId)}`);
+  if (options?.focusId) queryParts.push(`focus=${encodeURIComponent(options.focusId)}`);
+  if (view === 'publications' && options?.projectId) queryParts.push(`project=${encodeURIComponent(options.projectId)}`);
   return queryParts.length > 0 ? hash + '?' + queryParts.join('&') : hash;
 }
 
@@ -52,7 +68,7 @@ export function parseHash(hash: string, search = window.location.search): RouteS
   const clean = hash.replace(/^#\/?/, '');
   if (!clean) {
     const searchRoom = new URLSearchParams(search).get('room');
-    return { view: 'rooms', roomId: searchRoom, taskId: null, panel: null };
+    return { view: searchRoom ? 'rooms' : 'projects', roomId: searchRoom, taskId: null, panel: null };
   }
 
   const [path, queryString] = clean.split('?');
@@ -61,6 +77,8 @@ export function parseHash(hash: string, search = window.location.search): RouteS
   const primary = segments[0] as WorkbenchView;
 
   const validViews: WorkbenchView[] = [
+    'projects',
+    'publications',
     'rooms',
     'tasks',
     'members',
@@ -71,7 +89,7 @@ export function parseHash(hash: string, search = window.location.search): RouteS
     'archive',
     'fixtures',
   ];
-  const view: WorkbenchView = validViews.includes(primary) ? primary : 'rooms';
+  const view: WorkbenchView = validViews.includes(primary) ? primary : 'projects';
 
   let roomId: string | null = null;
   let taskId: string | null = params.get('task');
@@ -91,6 +109,12 @@ export function parseHash(hash: string, search = window.location.search): RouteS
     roomId,
     taskId,
     panel: params.get('panel'),
+    ...(['projects', 'publications'].includes(view) ? {
+      projectId: view === 'projects' ? decodeId(segments[1]) : params.get('project'),
+      contentId: params.get('content'),
+      versionId: params.get('version'),
+      focusId: params.get('focus'),
+    } : {}),
   };
 }
 
@@ -146,6 +170,7 @@ export function useWorkbenchRoute(initialRoomId?: string | null) {
     const target = { ...parsed, taskId: null };
     const newHash = routeHash(target.view, {
       roomId: target.roomId,
+      projectId: target.projectId, contentId: target.contentId, versionId: target.versionId, focusId: target.focusId,
       ...(target.panel ? { panel: target.panel } : {}),
     });
     url.hash = newHash;

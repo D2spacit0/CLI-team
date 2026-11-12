@@ -5,6 +5,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { z, ZodError } from 'zod';
 import { localOnly, redact, resolveInside } from './safety.mjs';
 import { UiDrafts } from './ui-drafts.mjs';
+import { installBusinessApi } from './business-api.mjs';
 
 export function createApp(service, { controllerToken = '', desktopToken = '', desktopOnly = false } = {}) {
   if (desktopOnly && !desktopToken) throw new Error('桌面访问凭据未配置');
@@ -26,6 +27,7 @@ export function createApp(service, { controllerToken = '', desktopToken = '', de
     next();
   });
   app.post('/api/tasks/:id/materials', express.json({ limit: '12mb', inflate: false }));
+  app.post('/api/projects/:id/materials', express.json({ limit: '12mb', inflate: false }));
   app.use(express.json({ limit: '256kb' }));
   app.use((req, res, next) => {
     if (['POST', 'PATCH', 'PUT'].includes(req.method) && !req.is('application/json')) {
@@ -35,6 +37,7 @@ export function createApp(service, { controllerToken = '', desktopToken = '', de
   });
   app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'CLI Team', version: '0.1.0' }));
   app.get('/api/bootstrap', (req, res) => res.json(service.bootstrap({ includeArchived: req.query.archived === '1' })));
+  installBusinessApi(app, service);
   const drafts = new UiDrafts(service);
   app.use('/api/ui-drafts', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   app.post('/api/ui-drafts/read', (req, res) => res.json(drafts.read(req.body)));

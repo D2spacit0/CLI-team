@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('cliTeamDesktop', Object.freeze({
   getInfo: () => ipcRenderer.invoke('desktop:get-info'),
   selectWorkspace: () => ipcRenderer.invoke('desktop:select-workspace'),
   openWorkspace: () => ipcRenderer.invoke('desktop:open-workspace'),
+  requestPublicationApproval: (contentId, versionId, expectedDigest) =>
+    ipcRenderer.invoke('desktop:request-publication-approval', contentId, versionId, expectedDigest),
+  openPublicationLogin: (projectId) => ipcRenderer.invoke('desktop:publication-login', projectId),
   onBeforeLeave: (save, resume) => {
     let activeRequestId;
     const listener = async (_event, requestId) => {

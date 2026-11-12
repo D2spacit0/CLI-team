@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell, Tray } from 'electron';
 import { BackendHost } from './backend-host.mjs';
 import { defaultWorkspace, loadWorkspace, saveWorkspace, trustedSender } from './workspace.mjs';
+import { renderContentCard } from './content-renderer.mjs';
+import { requestNativePublicationApproval } from './publication-approval.mjs';
 
 const appRoot = app.getAppPath();
 const executableDir = path.dirname(app.getPath('exe'));
@@ -24,9 +26,41 @@ let workspace = smoke ? path.resolve(smokeRoot) :
   loadWorkspace(settingsPath, defaultWorkspace(appRoot, executableDir, app.isPackaged));
 const nodePath = app.isPackaged ? path.join(process.resourcesPath, 'runtime', 'node.exe') : process.env.CLI_TEAM_NODE_EXECUTABLE;
 const backend = new BackendHost({ appRoot, nodePath: nodePath || '', logPath: path.join(stateRoot, 'desktop.log') });
+backend.contentRenderer = spec => renderContentCard(spec, { BrowserWindow, session });
 let window, desktopSession, quitting = false, switching = false, started = false, preloadReady = false, closing = false;
 let rendererOrigin = '';
 let draftLeave;
+let tray, approvalPending = false, pageGeneration = 0;
+
+function showWorkbench() {
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+function invalidateApproval() {
+  pageGeneration++;
+  if (backend.child?.connected) void backend.request('publication:invalidate').catch(() => {});
+}
+function createTray() {
+  tray = new Tray(path.join(appRoot, 'desktop', 'assets', 'icon.png'));
+  tray.setToolTip('CLI Team · 后台继续工作');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开工作台', click: showWorkbench },
+    { label: '暂停全部', click: () => { void backend.request('pause-all').catch(error => dialog.showErrorBox('暂停未完成', error.message)); } },
+    { type: 'separator' }, { label: '退出 CLI Team', click: () => { void requestQuit(); } },
+  ]));
+  tray.on('double-click', showWorkbench);
+}
+async function hideToTray() {
+  if (closing || switching || quitting) return;
+  closing = true;
+  try {
+    if (!await allowLeaving()) return;
+    window.hide();
+    cancelRendererLeave();
+  } finally { closing = false; }
+}
 
 function flushRendererDrafts() {
   if (!started || !window || window.isDestroyed() || !preloadReady) return Promise.resolve(true);
@@ -69,8 +103,11 @@ async function stopAndQuit(saveDrafts = false) {
   if (saveDrafts && !await allowLeaving({ exit: true })) return;
   if (quitting) return;
   quitting = true;
+  invalidateApproval();
   try {
     await backend.stop();
+    tray?.destroy();
+    tray = undefined;
     app.quit();
   } catch (error) {
     quitting = false;
@@ -110,6 +147,7 @@ async function connect(root) {
   fs.mkdirSync(root, { recursive: true });
   await backend.start(root);
   workspace = root;
+  await backend.request('publication:session', { workspace, desktopSession: randomUUID() });
   rendererOrigin = backend.url;
   setConnectionPolicy();
   if (window) {
@@ -124,9 +162,9 @@ if (startupError) {
 }
 else if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } });
+  app.on('second-instance', showWorkbench);
   app.on('before-quit', (event) => { if (!quitting) { event.preventDefault(); void requestQuit(); } });
-  app.on('window-all-closed', () => { void stopAndQuit(); });
+  app.on('window-all-closed', () => { if (started && !tray && !quitting) void stopAndQuit(); });
   backend.on('unexpected-exit', () => {
     if (started && !switching && !quitting) {
       cancelRendererLeave();
@@ -148,6 +186,24 @@ else {
     draftLeave.finish(saved);
   });
   ipcMain.handle('desktop:get-info', (event) => { validate(event); return { version: app.getVersion(), workspace, platform: process.platform }; });
+  ipcMain.handle('desktop:publication-login', async (event, projectId) => {
+    validate(event);
+    if (switching || closing || quitting || approvalPending) throw new Error('桌面正在处理其他操作，请稍后重试。');
+    if (projectId !== undefined && (typeof projectId !== 'string' || projectId.length > 180)) throw new Error('项目身份无效。');
+    const response = await backend.request('publication:login', { projectId });
+    validate(event);
+    return response.result;
+  });
+  ipcMain.handle('desktop:request-publication-approval', async (event, contentId, versionId, expectedDigest) => {
+    validate(event);
+    if (switching || closing || quitting || approvalPending) throw new Error('已有桌面操作正在处理，请稍后重试。');
+    approvalPending = true;
+    try {
+      return await requestNativePublicationApproval({ event, window, backend, contentId, versionId, expectedDigest,
+        getContext: () => ({ origin: rendererOrigin, generation: pageGeneration, workspace, backendState: backend.state, switching, quitting }),
+        showMessageBox: (parent, options) => dialog.showMessageBox(parent, options) });
+    } finally { approvalPending = false; }
+  });
   ipcMain.handle('desktop:open-workspace', async (event) => {
     validate(event);
     const error = await shell.openPath(workspace);
@@ -155,7 +211,7 @@ else {
   });
   ipcMain.handle('desktop:select-workspace', async (event) => {
     validate(event);
-    if (switching || closing || quitting) throw new Error('正在切换工作目录或退出，请稍后重试。');
+    if (switching || closing || quitting || approvalPending) throw new Error('正在处理桌面确认、切换工作目录或退出，请稍后重试。');
     switching = true;
     const previous = workspace;
     try {
@@ -163,6 +219,7 @@ else {
         properties: ['openDirectory', 'createDirectory'] });
       if (selected.canceled || !selected.filePaths[0] || path.resolve(selected.filePaths[0]) === workspace) return { changed: false, workspace };
       if (!await allowLeaving()) return { changed: false, workspace: previous };
+      invalidateApproval();
       await backend.stop({ onlyIfIdle: true });
       try { await connect(path.resolve(selected.filePaths[0])); saveWorkspace(settingsPath, workspace); }
       catch (error) {
@@ -192,12 +249,13 @@ else {
         backgroundThrottling: !smoke },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event, url) => { if (!url.startsWith(`${backend.url}/`)) event.preventDefault(); });
+    window.webContents.on('will-navigate', (event, url) => { invalidateApproval(); if (!url.startsWith(`${backend.url}/`)) event.preventDefault(); });
+    window.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => { if (isMainFrame) invalidateApproval(); });
     window.webContents.on('will-attach-webview', (event) => event.preventDefault());
     window.on('close', (event) => {
       if (quitting) return;
       event.preventDefault();
-      void requestQuit();
+      void hideToTray();
     });
     await window.loadURL(backend.url);
     started = true;
@@ -254,7 +312,7 @@ else {
         draftsSaved, ...(coordination ? { coordination } : {}), ...(assistance ? { assistance } : {}),
         ...(usability ? { usability } : {}), ...(workbench ? { workbench } : {}), ...(managed ? { managed } : {}), ...(experience ? { experience } : {}), ...(taskActions ? { taskActions } : {}), ...(managedRequest ? { managedRequest } : {}) }, null, 2));
       await stopAndQuit();
-    } else { saveWorkspace(settingsPath, workspace); window.show(); }
+    } else { createTray(); saveWorkspace(settingsPath, workspace); window.show(); }
     }
   } catch (error) {
     if (smoke) fs.writeFileSync(path.join(workspace, 'desktop-smoke.json'), JSON.stringify({ ok: false, error: error.message }));

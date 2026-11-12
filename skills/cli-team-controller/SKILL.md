@@ -1,6 +1,6 @@
 ---
 name: cli-team-controller
-description: Control the local CLI Team workspace to delegate implementation, bounded multi-agent discussions, independent review and evidence-based acceptance while keeping controller context small.
+description: Operate the local CLI Team workbench for ongoing business projects, fixed deliverables, owner coordination, and independently reviewed tasks through its MCP or CLI interfaces.
 ---
 
 # CLI Team Controller
@@ -12,6 +12,15 @@ The CLI Team desktop app must already be running with the intended workspace.
 The desktop app is the product entry point. Use its MCP tools if connected,
 otherwise run `node tools/team.mjs` from the CLI Team project; set
 `CLI_TEAM_WORKSPACE` if the desktop uses a different directory.
+
+For ongoing business projects and content production, read
+[references/projects.md](references/projects.md). Use the project APIs for an
+existing business project so its goals, materials, receipts and versions stay
+together. `business-state` lists those projects; the legacy `status` command
+describes task and room workflows. A business work item is not a legacy task.
+
+The task and room guidance below applies to standalone implementation,
+discussions, and existing legacy tasks.
 
 1. Read `status` or `inbox`, not raw conversation history.
 2. Use `task` with an objective, scope, assignee, independent reviewer and

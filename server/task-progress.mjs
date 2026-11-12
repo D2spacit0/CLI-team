@@ -21,6 +21,13 @@ export function taskQueueReason(run, service) {
   if (run.status !== 'queued') return '';
   if (service.settings().paused) return '全局调度已暂停，恢复调度后继续';
   if ([...active.values()].some((entry) => entry.memberId === run.memberId)) return '该成员正在处理其他作业，等待空闲';
+  if (run.workflowKind === 'business') {
+    const work = service.store.get('workItems', run.workItemId);
+    if (service.business.memberQuarantined(run.memberId)) return '上次进程退出尚未确认，成员已隔离';
+    if (work?.waitReason) return work.waitReason;
+    if (service.store.get('projects', run.projectId)?.status !== 'active') return '项目已暂停，等待继续';
+    return active.size >= service.settings().maxParallel ? '并发名额已满，等待其他作业完成' : '已进入共用队列，等待调度启动';
+  }
   const room = service.require('rooms', run.roomId);
   const member = service.require('members', run.memberId);
   const { resource, writer } = runPolicy(run, member, room);

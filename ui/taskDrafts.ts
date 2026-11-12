@@ -2,6 +2,11 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 export type TaskDraftScope =
   | { kind: 'new-task'; contextId?: string }
+  | { kind: 'new-project' }
+  | { kind: 'project-message'; projectId: string }
+  | { kind: 'project-brief'; projectId: string }
+  | { kind: 'project-fact'; projectId: string }
+  | { kind: 'content-revision-request'; contentId: string; versionId: string }
   | { kind: 'room-create' }
   | { kind: 'meeting-create'; roomId: string }
   | { kind: 'room-message'; roomId: string }
@@ -17,6 +22,11 @@ type Transport = (url: string, options: RequestInit) => Promise<Response>;
 type Mutation = { kind: 'write'; changes: TaskDraftValues; version: number }
   | { kind: 'clear'; version: number; finish: (saved: boolean) => void; settled?: boolean };
 const fields: Record<TaskDraftScope['kind'], readonly string[]> = {
+  'new-project': ['name', 'objective', 'brief', 'ownerId', 'memberIds', 'reviewerId', 'timeZone', 'requestId'],
+  'project-message': ['body', 'recipientId', 'requestId'],
+  'project-brief': ['objective', 'brief', 'expectedRevision'],
+  'project-fact': ['content', 'type', 'source', 'requestId'],
+  'content-revision-request': ['feedback', 'requestId'],
   'new-task': ['title', 'objective', 'requirements', 'verificationCommand', 'executionMode', 'assigneeId', 'reviewerId',
     'participantIds', 'roomId', 'sourceSessionId', 'sourceTitle', 'preparationTaskId', 'materialManifest', 'creationRequestId'],
   revision: ['feedback'], acceptance: ['note'], assistance: ['answer'],
@@ -27,6 +37,9 @@ const fields: Record<TaskDraftScope['kind'], readonly string[]> = {
   'meeting-create': ['objective', 'memberIds', 'requestId'],
 };
 function normalizedScope(scope: TaskDraftScope): TaskDraftScope {
+  if (scope.kind === 'new-project') return { kind: scope.kind };
+  if (scope.kind === 'project-message' || scope.kind === 'project-brief' || scope.kind === 'project-fact') return { kind: scope.kind, projectId: scope.projectId };
+  if (scope.kind === 'content-revision-request') return { kind: scope.kind, contentId: scope.contentId, versionId: scope.versionId };
   if (scope.kind === 'new-task') return { kind: scope.kind, contextId: scope.contextId || 'default' };
   if (scope.kind === 'room-create') return { kind: scope.kind };
   if (scope.kind === 'room-message' || scope.kind === 'managed-request' || scope.kind === 'meeting-create') return { kind: scope.kind, roomId: scope.roomId };

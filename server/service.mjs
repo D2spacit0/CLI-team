@@ -18,6 +18,11 @@ import { DshSessionCatalog, dshHome } from './dsh-sessions.mjs';
 import { taskAttention, taskQueueReason } from './task-progress.mjs';
 import { runPolicy } from './run-policy.mjs';
 import { decodeMaterial, inspectMaterials, isTaskInput, materialLimits, materialTarget } from './materials.mjs';
+import { acquireWorkspaceOwner } from './workspace-owner.mjs';
+import { ExecutionScheduler } from './execution-scheduler.mjs';
+import { BusinessWork } from './business-work.mjs';
+import { PublicationService } from './publications.mjs';
+import { BusinessToolService } from './business-tools.mjs';
 
 const roleSchema = z.enum(['builder', 'reviewer', 'researcher']);
 const memberSchema = z.object({
@@ -59,7 +64,7 @@ const fail = (message, status = 400) => { throw Object.assign(new Error(message)
 const clip = (value, max = 2000) => String(value || '').slice(0, max);
 
 export class TeamService extends EventEmitter {
-  constructor({ root, dataDir, workspaceRoot, agentExecutor = executeAgent, verifier = executeVerification, detect = discoverProvider, probe = probeCli, proxy, dshCatalog = new DshSessionCatalog() }) {
+  constructor({ root, dataDir, workspaceRoot, agentExecutor = executeAgent, verifier = executeVerification, detect = discoverProvider, probe = probeCli, proxy, dshCatalog = new DshSessionCatalog(), contentRenderer, publicationOptions = {} }) {
     super();
     this.root = path.resolve(root);
     this.dataDir = path.resolve(dataDir || path.join(root, '.team'));
@@ -67,7 +72,9 @@ export class TeamService extends EventEmitter {
     fs.mkdirSync(this.dataDir, { recursive: true });
     fs.mkdirSync(this.workspaceRoot, { recursive: true });
     fs.mkdirSync(path.join(this.dataDir, 'runs'), { recursive: true });
-    this.store = new Store(path.join(this.dataDir, 'team.sqlite'));
+    this.workspaceOwner = acquireWorkspaceOwner(this.dataDir);
+    try { this.store = new Store(path.join(this.dataDir, 'team.sqlite'), { workspaceRoot: this.workspaceRoot }); }
+    catch (error) { this.workspaceOwner.release(); throw error; }
     this.agentExecutor = agentExecutor;
     this.verifier = verifier;
     this.detect = detect;
@@ -80,9 +87,21 @@ export class TeamService extends EventEmitter {
     this.assistance = new TaskAssistance(this);
     this.managedTasks = new ManagedTasks(this);
     this.supervision = new TaskSupervision(this);
+    this.executionScheduler = new ExecutionScheduler(this);
     this.seed(proxy);
     this.recover();
+    this.business = new BusinessWork(this, { contentRenderer });
+    this.projects = this.business.projects;
+    this.contentRevisions = this.business.contents;
+    this.publications = new PublicationService({ ...publicationOptions, store: this.store, root: this.dataDir,
+      resolveSnapshot: (contentId, versionId) => this.contentRevisions.getBundle(contentId, versionId),
+      inspectRevision: versionId => this.contentRevisions.inspectRevision(versionId),
+      wake: () => this.kick(), onEvent: event => this.emit('change', event) });
+    this.businessTools = new BusinessToolService({ store: this.store, renderer: contentRenderer, publications: this.publications });
+    this.business.recover();
+    this.publications.recover();
     for (const member of this.store.list('members')) this.repairMemberEntry(member);
+    this.business.start();
   }
   seed(proxy) {
     if (!this.store.get('settings', 'workspace')) this.store.put('settings', {
@@ -123,7 +142,7 @@ export class TeamService extends EventEmitter {
   }
   recover() {
     this.store.transaction(() => {
-      for (const run of this.store.list('runs').filter(isActive)) {
+      for (const run of this.store.list('runs').filter(run => isActive(run) && run.workflowKind !== 'business')) {
         this.store.update('runs', run.id, { status: 'interrupted', error: '服务重启，未自动重放任务', finishedAt: now() });
       }
       for (const task of this.store.list('tasks')) {
@@ -605,34 +624,7 @@ export class TeamService extends EventEmitter {
   }
   kick() { this.store.afterCommit(() => { if (!this.closing) queueMicrotask(() => this.pump()); }); }
   pump() {
-    if (this.closing || this.settings().paused) return;
-    const busy = new Set([...this.active.values()].map((entry) => entry.memberId));
-    for (const run of this.store.list('runs').filter((item) => item.status === 'queued')) {
-      if (this.active.size >= this.settings().maxParallel) break;
-      if (busy.has(run.memberId)) continue;
-      const room = this.require('rooms', run.roomId);
-      const member = this.require('members', run.memberId);
-      const { resource, writer } = runPolicy(run, member, room);
-      if ([...this.active.values()].some((entry) => entry.resource === resource && (writer || entry.writer))) continue;
-      const controller = new AbortController();
-      const entry = { memberId: run.memberId, controller, resource, writer, promise: null };
-      this.active.set(run.id, entry);
-      busy.add(run.memberId);
-      entry.promise = this.execute(run, controller.signal).catch((error) => {
-        if (!this.closing) {
-          const current = this.require('runs', run.id);
-          if (!TERMINAL_RUNS.has(current.status)) this.store.update('runs', run.id, { status: 'failed', error: redact(error.message), finishedAt: now() });
-          if (run.taskId) this.blockTask(run.taskId, error.message);
-          else if (run.meetingId) this.advanceMeeting(this.require('runs', run.id));
-          else this.notice('blocked', error.message, { runId: run.id, roomId: run.roomId });
-          this.emitChange(TERMINAL_RUNS.has(current.status) ? 'dispatch.failed' : 'run.failed', { id: run.id });
-        }
-      }).finally(() => {
-        this.active.delete(run.id);
-        if (!this.closing) this.emitChange('run.settled', { id: run.id, taskId: run.taskId, roomId: run.roomId });
-        this.kick();
-      });
-    }
+    this.executionScheduler.pump();
   }
   buildPrompt(run, member, workspace) {
     const roster = this.members().filter((item) => item.enabled && item.provider !== 'controller')
@@ -1270,6 +1262,21 @@ Reviewers must set verdict to approve or changes_requested. Do not approve on th
   }
   cancelRun(runId) {
     const run = this.require('runs', runId);
+    if (run.workflowKind === 'business') {
+      return this.store.transaction(() => {
+        const work = this.require('workItems', run.workItemId);
+        if (TERMINAL_RUNS.has(run.status) && !this.active.has(runId)) return this.publicRun(run);
+        if (work.runId === run.id && work.generation === run.generation) this.business.cancelWork(work.id, '用户取消了此工作');
+        else {
+          this.store.update('runs', runId, { status: 'cancelled', error: '用户取消了旧版本运行', finishedAt: now() });
+          this.store.afterCommit(() => this.active.get(runId)?.controller.abort());
+        }
+        this.business.refreshReady();
+        this.business.scheduler.finishCycle(work.cycleId);
+        this.emitChange('run.cancelled', { id: runId, projectId: run.projectId });
+        return this.publicRun(this.require('runs', runId));
+      });
+    }
     if (TERMINAL_RUNS.has(run.status) && !(run.taskId && this.verifying.has(run.taskId) && this.active.has(runId))) return this.publicRun(run);
     this.active.get(runId)?.controller.abort();
     if (run.taskId) this.verifying.get(run.taskId)?.abort();
@@ -1403,12 +1410,30 @@ Reviewers must set verdict to approve or changes_requested. Do not approve on th
     return { activeRuns: this.active.size, queuedRuns: this.store.list('runs').filter((run) => run.status === 'queued').length,
       pendingCount: notices.length, notices: notices.slice(-10).map((notice) => ({ ...notice, summary: clip(notice.summary, 500) })) };
   }
+  async pauseAll() {
+    this.store.transaction(() => {
+      this.store.update('settings', 'workspace', { paused: true });
+      for (const project of this.projects.list().filter(item => item.status === 'active')) this.business.pauseProject(project.id);
+      for (const task of this.store.list('tasks').filter(item => item.status === 'running' && !item.archivedAt)) this.pauseTask(task.id, { note: '托盘暂停全部工作' });
+      for (const run of this.store.list('runs').filter(isActive)) this.cancelRun(run.id);
+      this.emitChange('settings.updated', { paused: true });
+    });
+    await Promise.allSettled([...this.active.values()].map(entry => entry.promise));
+    return { paused: true, activeRuns: this.active.size };
+  }
   async close() {
+    if (this.closePromise) return this.closePromise;
     this.closing = true;
-    for (const entry of this.active.values()) entry.controller.abort();
-    for (const controller of this.verifying.values()) controller.abort();
-    for (const entry of this.probing.values()) entry.controller.abort();
-    await Promise.allSettled([...this.active.values(), ...this.probing.values()].map((entry) => entry.promise));
-    this.store.close();
+    this.closePromise = (async () => {
+      for (const entry of this.active.values()) entry.controller.abort();
+      for (const controller of this.verifying.values()) controller.abort();
+      for (const entry of this.probing.values()) entry.controller.abort();
+      await Promise.allSettled([...this.active.values(), ...this.probing.values()].map((entry) => entry.promise));
+      await this.business?.close();
+      await this.publications?.close();
+      this.store.close();
+      this.workspaceOwner.release();
+    })();
+    return this.closePromise;
   }
 }

@@ -195,3 +195,170 @@ export interface ExternalSession {
   summary: string; lastRequest: string; model: string; provider: string;
   mode: 'observe'; ownership: 'desktop'; canControl: false; syncedAt?: string;
 }
+
+export interface BusinessAccount {
+  id: string; name?: string; label?: string; platform?: string; status?: string;
+  connectorVersion?: string;
+}
+export interface BusinessProject {
+  id: string; name: string; objective: string; moduleId: string; moduleVersion?: string;
+  brief: string; briefVersion: number; revision: number;
+  ownerId: string; memberIds: string[]; reviewerId: string | null;
+  timeZone: string; timezone?: string;
+  status: 'active' | 'paused' | 'attention' | 'archived';
+  account: BusinessAccount | null;
+  limits: { dailyCliCalls: number; maxPending: number; maxAttempts: number };
+  materials?: BusinessMaterial[]; createdAt: string; updatedAt?: string; waitReason?: string;
+  blockers?: string[];
+}
+export interface BusinessMaterial {
+  id: string; name: string; sha256: string; size: number; source?: string;
+  importedAt?: string; createdAt?: string;
+}
+export interface BusinessSource { label: string; url?: string; kind?: string }
+export interface ProjectFact {
+  id: string; projectId: string; type: 'fact' | 'judgment' | 'preference';
+  content: string; sources: BusinessSource[]; status: 'proposed' | 'adopted' | 'superseded';
+  revision: number; proposedBy?: string; adoptedBy?: string; createdAt: string;
+}
+export interface ProductionCycle {
+  id: string; projectId: string; dateKey?: string; localDate?: string;
+  objective?: string; status: string; createdAt: string; summary?: string;
+}
+export interface BusinessInputRef {
+  kind: string; id: string; version?: string | number; revision?: string | number;
+  versionId?: string; digest?: string; label?: string;
+}
+export interface BusinessWorkItem {
+  id: string; projectId: string; cycleId?: string; contentId?: string | null;
+  title?: string; objective: string; memberId: string; role?: string; kind?: string;
+  status: string; generation: number; currentAttemptId?: string | null;
+  attempts?: number; dependsOn?: string[]; dependencies?: string[]; inputRefs?: BusinessInputRef[];
+  receiverId?: string; checkerId?: string; acceptanceCriteria?: string[];
+  originalDueAt?: string | null; dueAt?: string | null; handoffStatus?: WorkHandoffStatus;
+  resultDigest?: string; currentReceiptId?: string | null; runId?: string; threadId?: string | null;
+  summary?: string; waitReason?: string; error?: string; createdAt: string; updatedAt?: string;
+}
+export type WorkHandoffStatus = 'assigned' | 'accepted' | 'received' | 'verified' | 'returned' | 'blocked' | 'cancelled';
+export interface WorkHandoff {
+  id: string; projectId: string; workItemId: string; generation: number; type: string;
+  actorId?: string | null; recipientId?: string | null; runId?: string | null; receiptId?: string | null;
+  resultDigest?: string | null; message?: string; evidenceType: string; createdAt: string;
+}
+export interface WorkReceipt {
+  id: string; projectId: string; workItemId: string; generation: number;
+  attemptId: string; runId: string; receiverId: string; createdAt: string;
+  inputDigest: string; resultDigest: string; manifestHash: string;
+  files: Array<{ relativePath: string; sha256: string; size: number; mime?: string }>;
+  summary: string; checks: string[]; evidenceType: 'machine'; versionId: string | null;
+}
+export interface BusinessSkill {
+  id: string; name: string; version: string; description: string; roles: string[];
+  sourceUrl: string; digest: string;
+}
+export interface BusinessCollaboration {
+  id: string; projectId: string; contentId?: string | null; workItemId?: string;
+  sourceRunId?: string; sourceWorkItemId?: string; requesterId?: string;
+  recipientId?: string; memberId?: string; type?: string; kind?: string; status: string;
+  question?: string; body?: string; answer?: string; summary?: string;
+  resolution?: string; inputRefs?: BusinessInputRef[]; createdAt: string; answeredAt?: string;
+  answerRunId?: string; resolvedAt?: string; versionId?: string; evidenceType?: string;
+}
+export interface BusinessAction {
+  id: string; projectId: string; contentId?: string; workItemId?: string;
+  sourceRunId?: string; memberId?: string; type: string; status?: string;
+  body?: string; summary?: string; question?: string; title?: string;
+  reason?: string; createdAt: string;
+  sourceWorkItemId?: string; generation?: number;
+  input?: { message?: string; title?: string; objective?: string; question?: string; reason?: string; content?: string; tool?: string };
+  result?: { id?: string; threadId?: string; workItemId?: string };
+}
+export interface ContentItem {
+  id: string; projectId: string; title: string; status: string;
+  currentRevisionId: string | null; currentDraftVersionId?: string | null;
+  currentReviewVersionId?: string | null; generation: number; createdAt: string; updatedAt?: string;
+}
+export interface ContentImage {
+  sha256: string; hash?: string; width: number; height: number; size: number;
+  mime: string; source: string | BusinessSource; templateVersion?: string; name?: string;
+}
+export interface ContentSchedule {
+  mode?: 'immediate' | 'scheduled'; kind?: 'immediate' | 'scheduled'; startsAt?: string;
+}
+export interface ContentRevision {
+  id: string; contentId: string; projectId: string; revision: number; parentId: string | null;
+  title: string; body: string; tags: string[]; topics?: string[]; images: ContentImage[];
+  manifest: Record<string, unknown>; manifestHash: string; digest: string;
+  inputRefs: BusinessInputRef[]; authorMemberIds: string[]; visibility: string;
+  schedule?: ContentSchedule | null; changeSummary?: string; createdAt: string;
+}
+export interface ContentEligibility {
+  id: string; contentId?: string; versionId: string; revision: number;
+  status: 'pending' | 'eligible' | 'invalid'; reason?: string;
+  checkIds: string[]; reviewIds: string[]; checkId?: string; reviewId?: string;
+}
+export interface ContentFinding { code?: string; message: string; severity?: string }
+export interface ContentCheck {
+  id: string; contentId: string; versionId: string; manifestHash: string;
+  passed: boolean; findings: ContentFinding[]; createdAt: string; evidenceType: 'machine';
+  status?: string; invalidatedAt?: string | null;
+}
+export interface ContentReview {
+  id: string; memberId: string; contentId: string; versionId: string; manifestHash: string;
+  verdict: 'approve' | 'changes_requested'; summary: string;
+  findings?: (ContentFinding | string)[]; createdAt: string; evidenceType: 'agent_review';
+  status?: string; sourceRunId?: string | null; invalidatedAt?: string | null;
+  reusedFromReviewId?: string; evidenceReuse?: 'schedule_only';
+}
+export interface PublicationApproval {
+  id: string; contentId: string; versionId: string; projectId?: string; status: string;
+  approvalDigest: string; account?: BusinessAccount; approvedAt?: string; createdAt: string;
+  startsAt?: string; endsAt?: string; reason?: string;
+}
+export interface PublicationAttempt {
+  id: string; publicationId?: string; contentId: string; versionId: string; projectId?: string;
+  status: string; submissionMayHaveOccurred: boolean; account?: BusinessAccount;
+  createdAt: string; updatedAt?: string; summary?: string; reason?: string;
+  error?: string; noteId?: string; noteUrl?: string; verificationBlocked?: string;
+  evidence?: { noteId?: string; accountId?: string; verifiedAt?: string; noteUrl?: string; summary?: string };
+}
+export interface Publication {
+  id: string; contentId: string; versionId: string; projectId?: string;
+  status: string; approvalId?: string; attemptId?: string; createdAt: string;
+}
+export interface MetricValue {
+  name: string; label?: string; value: number | null; status?: string;
+  unavailableReason?: string; reason?: string; source?: string;
+}
+export interface MetricsSnapshot {
+  id: string; projectId?: string; contentId?: string; noteId: string;
+  collectedAt?: string; createdAt?: string; source?: string;
+  metrics?: MetricValue[] | Record<string, number | null | MetricValue>;
+  name?: string; value?: number | null; unavailableReason?: string;
+}
+export interface BusinessConnection {
+  status: 'ready' | 'login_required' | 'unavailable';
+  account?: BusinessAccount | null; version?: string; browserOpen?: boolean;
+  reason?: string; message?: string; checkedAt?: string;
+  capabilities?: Record<string, boolean | string | null>;
+  gates?: Array<{ name: string; status: string; reason?: string }>;
+}
+export interface BusinessSnapshot {
+  projects: BusinessProject[]; projectFacts: ProjectFact[]; productionCycles: ProductionCycle[];
+  projectMaterials: Array<BusinessMaterial & { projectId: string }>;
+  workItems: BusinessWorkItem[]; contentItems: ContentItem[]; contentRevisions: ContentRevision[];
+  contentEligibilities: ContentEligibility[]; contentChecks: ContentCheck[]; reviews: ContentReview[];
+  collaborationThreads: BusinessCollaboration[]; actions: BusinessAction[];
+  workHandoffs: WorkHandoff[]; workReceipts: WorkReceipt[]; skillCatalog: BusinessSkill[];
+  publications: Publication[]; approvals: PublicationApproval[]; attempts: PublicationAttempt[];
+  metrics: MetricsSnapshot[]; connection: BusinessConnection | null;
+}
+export interface PublicationPreview {
+  contentId: string; versionId: string; revision: ContentRevision; content?: ContentItem;
+  approvalDigest: string; canApprove: boolean; blockers: string[]; account: BusinessAccount | null;
+  timeWindow: { kind: string; startsAt: string | null; endsAt: string | null; display: string };
+  payload: { title: string; body: string; tags: string[]; images: Array<Pick<ContentImage, 'sha256' | 'width' | 'height' | 'mime'> & { index?: number }>; visibility: string };
+  connector: { version?: string; status: string; capabilities?: Record<string, boolean | string | null> };
+  eligibility?: ContentEligibility; checks?: ContentCheck[]; reviews?: ContentReview[];
+  approval: PublicationApproval | null; attempt: PublicationAttempt | null;
+}

@@ -5,6 +5,7 @@ import { resolveInside, redact } from './safety.mjs';
 import { materialName } from './materials.mjs';
 import { protocolError } from './runtime-diagnostics.mjs';
 import { discoverDshDesktop, dshDesktopInfo, dshInstalledVersion } from './dsh-installation.mjs';
+import { businessReportSchema, businessReportJsonSchema } from './business-protocol.mjs';
 
 export const providers = ['antigravity', 'dsh', 'claude', 'gemini', 'codex', 'opencode', 'custom'];
 const sectionKeyPattern = '^[a-z][a-z0-9-]{0,39}$';
@@ -51,6 +52,7 @@ export const agentReport = z.object({
   analysis: analysisSchema.default([]),
   helpRequest: z.object({ question: z.string().trim().min(1).max(3000) }).strict().nullable().default(null),
   consult: z.object({ memberId: z.string().trim().min(1).max(200), question: z.string().trim().min(1).max(3000) }).strict().nullable().default(null),
+  business: businessReportSchema.nullable().optional(),
 });
 
 const insensitive = (pattern) => pattern.replace(/[a-z]/gi, (letter) => `[${letter.toLowerCase()}${letter.toUpperCase()}]`);
@@ -120,6 +122,7 @@ export const reportSchema = {
       properties: { question: { type: 'string', minLength: 1, maxLength: 3000 } } }] },
     consult: { anyOf: [{ type: 'null' }, { type: 'object', additionalProperties: false, required: ['memberId', 'question'],
       properties: { memberId: { type: 'string', minLength: 1, maxLength: 200 }, question: { type: 'string', minLength: 1, maxLength: 3000 } } }] },
+    business: businessReportJsonSchema,
   },
 };
 

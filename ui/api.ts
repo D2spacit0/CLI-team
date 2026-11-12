@@ -13,6 +13,13 @@ import type {
   ExternalSession,
   Material,
   MaterialList,
+  BusinessSnapshot,
+  BusinessProject,
+  ProjectFact,
+  BusinessMaterial,
+  PublicationPreview,
+  BusinessConnection,
+  ContentSchedule,
 } from './types';
 
 export class ApiError extends Error {
@@ -55,6 +62,39 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getBusinessState: () => request<BusinessSnapshot>('/api/business/state'),
+  createProject: (data: {
+    requestId: string; name: string; objective: string; brief: string; moduleId: string;
+    ownerId: string; memberIds: string[]; reviewerId: string | null; timeZone: string; start: boolean;
+  }) => request<BusinessProject>('/api/projects', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id: string, data: Partial<BusinessProject> & { expectedRevision: number }) =>
+    request<BusinessProject>(`/api/projects/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  bindProjectAccount: (id: string, expectedRevision: number) =>
+    request<BusinessProject>(`/api/projects/${encodeURIComponent(id)}/account`, { method: 'POST', body: JSON.stringify({ expectedRevision }) }),
+  setProjectPaused: (id: string, paused: boolean) =>
+    request<BusinessProject>(`/api/projects/${encodeURIComponent(id)}/${paused ? 'pause' : 'resume'}`, { method: 'POST', body: '{}' }),
+  sendProjectMessage: (id: string, data: { requestId: string; body: string; recipientId?: string }) =>
+    request(`/api/projects/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify(data) }),
+  addProjectFact: (id: string, data: { requestId?: string; type: ProjectFact['type']; content: string; source?: string; sources?: ProjectFact['sources'] }) =>
+    request<ProjectFact>(`/api/projects/${encodeURIComponent(id)}/facts`, { method: 'POST', body: JSON.stringify(data) }),
+  importProjectMaterial: (id: string, name: string, contentBase64: string, sha256: string) =>
+    request<BusinessMaterial>(`/api/projects/${encodeURIComponent(id)}/materials`, {
+      method: 'POST', body: JSON.stringify({ name, contentBase64, sha256 }),
+    }),
+  getPublicationPreview: (contentId: string, versionId: string) =>
+    request<PublicationPreview>(`/api/content/${encodeURIComponent(contentId)}/preview?versionId=${encodeURIComponent(versionId)}`),
+  contentImageUrl: (contentId: string, versionId: string, index: number) =>
+    `/api/content/${encodeURIComponent(contentId)}/revisions/${encodeURIComponent(versionId)}/images/${index}`,
+  requestContentRevision: (contentId: string, data: { versionId: string; feedback: string; requestId: string }) =>
+    request(`/api/content/${encodeURIComponent(contentId)}/revision-requests`, { method: 'POST', body: JSON.stringify(data) }),
+  setContentSchedule: (contentId: string, data: ContentSchedule & { versionId: string; visibility: string }) =>
+    request(`/api/content/${encodeURIComponent(contentId)}/schedule`, { method: 'PUT', body: JSON.stringify(data) }),
+  revokePublication: (id: string) => request(`/api/publications/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: '{}' }),
+  reconcilePublication: (id: string, noteUrl?: string) => request(`/api/publications/${encodeURIComponent(id)}/reconcile`, {
+    method: 'POST', body: JSON.stringify(noteUrl ? { noteUrl } : {}),
+  }),
+  getBusinessConnection: () => request<BusinessConnection>('/api/business/connection'),
+  probeBusinessConnection: () => request<BusinessConnection>('/api/business/connection/probe', { method: 'POST', body: '{}' }),
   submitObjective: (data: { requestId: string; objective: string; roomId: string }) =>
     request<Task>('/api/requests', { method: 'POST', body: JSON.stringify(data), signal: AbortSignal.timeout(15000) }),
   // Bootstrap

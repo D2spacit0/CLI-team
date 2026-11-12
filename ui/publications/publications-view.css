@@ -1,0 +1,140 @@
+/* A dispatch queue uses compact working rows, not manuscript preview cards. */
+.business-publications-view.publication-command-queue {
+  --queue-border: color-mix(in srgb, var(--wb-muted) 23%, transparent);
+  --queue-rule: color-mix(in srgb, var(--wb-muted) 13%, transparent);
+  background: var(--wb-background);
+  color: var(--wb-text);
+  color-scheme: dark;
+  container-type: inline-size;
+}
+.publication-command-queue .business-page-header {
+  align-items: flex-end;
+  gap: 24px;
+  padding: 25px 30px;
+  background: var(--wb-surface-subtle);
+  border-bottom: 1px solid var(--queue-border);
+}
+.publication-command-queue .publication-page-label { display: flex; align-items: center; gap: 7px; color: var(--wb-accent); font-size: 10px; letter-spacing: .1em; }
+.publication-command-queue .business-page-header h1 { margin: 8px 0 7px; color: var(--wb-text); font: 500 28px/1.25 "Bahnschrift", "Microsoft YaHei UI", sans-serif; letter-spacing: .06em; }
+.publication-command-queue .business-page-header p { color: var(--wb-muted); font-size: 12px; line-height: 1.8; }
+.publication-command-queue .publication-filter { display: flex; flex-direction: column; gap: 8px; width: 200px; max-width: 100%; flex-shrink: 0; }
+.publication-command-queue .publication-filter > span { color: var(--wb-muted); font-size: 10px; letter-spacing: .04em; }
+.publication-command-queue .business-project-filter { min-height: 36px; width: 100%; color: var(--wb-text); background: var(--wb-background); border-color: var(--queue-border); border-radius: 3px; font-size: 12px; }
+.publication-command-queue .business-publications-scroll { padding: 24px 30px; scrollbar-color: var(--queue-border) transparent; }
+.publication-command-queue .publication-queue-readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 12px; border: 1px solid var(--queue-border); border-radius: 4px; background: var(--wb-surface-subtle); }
+.publication-command-queue .publication-queue-readout > div { padding: 18px 22px; border-right: 1px solid var(--queue-border); min-width: 0; }
+.publication-command-queue .publication-queue-readout > div:last-child { border-right: 0; }
+.publication-command-queue .publication-queue-readout dt { display: flex; align-items: center; gap: 7px; color: var(--wb-muted); font-size: 11px; }
+.publication-command-queue .publication-queue-readout dd { display: flex; align-items: baseline; gap: 8px; margin: 12px 0 0; color: var(--wb-text); font: 400 29px/1 var(--wb-font-mono, "Cascadia Code", Consolas, monospace); font-variant-numeric: tabular-nums; }
+.publication-command-queue .publication-queue-readout dd > span { color: var(--wb-muted); font: 400 10px/1.5 var(--wb-font-sans, "Microsoft YaHei UI", sans-serif); }
+.publication-command-queue .publication-queue-readout .unknown dt,
+.publication-command-queue .publication-queue-readout .unknown dd { color: var(--wb-warning); }
+.publication-command-queue .publication-queue-readout .sending dt > svg { color: var(--wb-accent); }
+
+.publication-command-queue .business-publication-group.publication-stage {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  margin: 0;
+  padding: 26px 0;
+  border: 0;
+  border-bottom: 1px solid var(--queue-border);
+  border-radius: 0;
+  background: transparent;
+}
+.publication-command-queue .publication-stage-header { align-items: flex-start; justify-content: flex-start; gap: 11px; margin: 0; }
+.publication-command-queue .publication-stage-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: 0 0 32px; border: 1px solid var(--queue-border); border-radius: 3px; color: var(--wb-muted); background: var(--wb-surface-subtle); }
+.publication-command-queue .publication-stage-header h2 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 4px 0 9px; color: var(--wb-text); font-size: 13px; line-height: 1.6; font-weight: 600; }
+.publication-command-queue .publication-stage-header p { color: var(--wb-muted); font-size: 11px; line-height: 1.85; margin: 0; }
+.publication-command-queue .publication-stage-header .business-count { min-width: 18px; padding: 1px 4px; color: var(--wb-muted); background: var(--wb-surface); border: 1px solid var(--queue-rule); border-radius: 2px; font: 400 10px/1.4 var(--wb-font-mono, "Cascadia Code", Consolas, monospace); text-align: center; }
+.publication-command-queue .publication-stage.unknown .publication-stage-icon { color: var(--wb-warning); border-color: color-mix(in srgb, var(--wb-warning) 30%, transparent); background: color-mix(in srgb, var(--wb-warning) 5%, var(--wb-background)); }
+.publication-command-queue .publication-stage.unknown h2 { color: var(--wb-warning); }
+.publication-command-queue .publication-queue-list { display: grid; gap: 1px; border: 1px solid var(--queue-border); border-radius: 4px; background: var(--queue-border); overflow: hidden; min-width: 0; }
+.publication-command-queue .publication-queue-row.business-content-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) minmax(128px, auto) auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  min-height: 108px;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--wb-surface-subtle);
+  color: var(--wb-text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+  transform: none;
+  transition: background 120ms ease-out;
+}
+.publication-command-queue .publication-queue-row.business-content-card:hover { background: var(--wb-surface); box-shadow: inset 2px 0 var(--wb-accent); transform: none; }
+.publication-command-queue .publication-row-preview { display: flex; align-items: center; justify-content: center; width: 44px; height: 59px; overflow: hidden; border: 1px solid var(--queue-border); border-radius: 2px; background: var(--wb-background); }
+.publication-command-queue .publication-row-preview > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.publication-command-queue .publication-row-preview > span { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--wb-muted); }
+.publication-command-queue .publication-row-preview small { font-size: 11px; line-height: 1.3; text-align: center; padding: 0 2px; }
+.publication-command-queue .publication-row-main { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.publication-command-queue .publication-row-project { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; color: var(--wb-muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.publication-command-queue .publication-row-project > span { padding-left: 10px; border-left: 1px solid var(--queue-border); font-family: var(--wb-font-mono, "Cascadia Code", Consolas, monospace); }
+.publication-command-queue .publication-row-main h3 { margin: 0; color: var(--wb-text); font-size: 14px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.publication-command-queue .publication-row-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--wb-muted); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.publication-command-queue .publication-row-state { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; min-width: 0; }
+.publication-command-queue .publication-row-state > span:last-child:not(.business-badge) { color: var(--wb-muted); font-size: 10px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.publication-command-queue .publication-row-state .business-badge { padding: 3px 7px; border-radius: 3px; font-size: 10px; }
+.publication-command-queue .publication-row-open { display: flex; align-items: center; justify-content: flex-end; gap: 6px; color: var(--wb-accent); font-size: 11px; white-space: nowrap; }
+.publication-command-queue .business-publication-empty { display: flex; align-items: center; min-height: 66px; margin: 0; padding: 14px 18px; border: 1px dashed var(--queue-border); border-radius: 3px; color: var(--wb-muted); font-size: 11px; line-height: 1.8; }
+.publication-command-queue .business-publications-help { align-items: center; gap: 12px; margin-top: 22px; padding: 0 0 8px; color: var(--wb-muted); font-size: 11px; }
+.publication-command-queue .business-publications-help > svg { flex-shrink: 0; }
+.publication-command-queue .business-publications-help p { line-height: 1.85; }
+.publication-command-queue .business-publications-help > .btn { flex-shrink: 0; font-size: 11px; }
+.publication-command-queue :is(button, select):focus-visible { outline: 2px solid var(--wb-accent); outline-offset: -3px; }
+.publication-command-queue select:focus-visible { outline-offset: 3px; }
+
+@container (max-width: 1120px) {
+  .publication-command-queue .business-publication-group.publication-stage { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .publication-command-queue .publication-stage-header p { max-width: 620px; }
+  .publication-command-queue .publication-stage-header h2 { margin-top: 2px; margin-bottom: 4px; }
+}
+
+@container (max-width: 760px) {
+  .publication-command-queue .business-page-header { padding: 22px; gap: 17px; flex-wrap: wrap; }
+  .publication-command-queue .business-publications-scroll { padding: 20px 22px; }
+  .publication-command-queue .publication-queue-readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .publication-command-queue .publication-queue-readout > div { padding: 16px 18px; }
+  .publication-command-queue .publication-queue-readout > div:nth-child(2) { border-right: 0; }
+  .publication-command-queue .publication-queue-readout > div:nth-child(-n+2) { border-bottom: 1px solid var(--queue-border); }
+  .publication-command-queue .publication-queue-row.business-content-card { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; }
+  .publication-command-queue .publication-row-preview { grid-row: 1 / 3; align-self: start; }
+  .publication-command-queue .publication-row-main { grid-column: 2; }
+  .publication-command-queue .publication-row-open { grid-column: 3; grid-row: 1; align-self: start; padding-top: 2px; }
+  .publication-command-queue .publication-row-state { grid-column: 2 / 4; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; }
+}
+
+@container (max-width: 480px) {
+  .publication-command-queue .business-page-header { align-items: stretch; padding: 20px 16px; }
+  .publication-command-queue .business-page-header h1 { font-size: 25px; }
+  .publication-command-queue .business-page-header p { font-size: 11px; }
+  .publication-command-queue .publication-filter { width: 100%; }
+  .publication-command-queue .business-project-filter { max-width: none; }
+  .publication-command-queue .business-publications-scroll { padding: 16px; }
+  .publication-command-queue .publication-queue-readout > div { padding: 15px; }
+  .publication-command-queue .publication-queue-readout dt { font-size: 10px; gap: 6px; }
+  .publication-command-queue .publication-queue-readout dd { font-size: 25px; }
+  .publication-command-queue .business-publication-group.publication-stage { padding: 22px 0; }
+  .publication-command-queue .publication-queue-row.business-content-card { grid-template-columns: 38px minmax(0, 1fr); padding: 13px; gap: 10px; }
+  .publication-command-queue .publication-row-preview { width: 38px; height: 51px; }
+  .publication-command-queue .publication-row-main h3 { font-size: 13px; }
+  .publication-command-queue .publication-row-state { grid-column: 2; }
+  .publication-command-queue .publication-row-open { grid-column: 2; grid-row: 3; flex-direction: row; font-size: 11px; white-space: nowrap; gap: 5px; }
+  .publication-command-queue .publication-row-description { font-size: 10px; }
+  .publication-command-queue .publication-row-state > span:last-child:not(.business-badge) { font-size: 11px; }
+  .publication-command-queue .business-publications-help { flex-wrap: wrap; gap: 10px; }
+  .publication-command-queue .business-publications-help p { flex: 1; min-width: 180px; }
+  .publication-command-queue .business-publications-help > .btn { margin-left: 27px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publication-command-queue .publication-queue-row.business-content-card { transition: none; }
+}
