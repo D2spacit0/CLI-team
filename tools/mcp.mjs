@@ -6,7 +6,7 @@ import { importLocalMaterial } from './materials.mjs';
 import { businessSchemas, readBusinessState, createBusinessProject, sendBusinessMessage, submitBusinessFact,
   importBusinessMaterial, previewBusinessContent, requestBusinessRevision } from './business-client.mjs';
 
-const server = new McpServer({ name: 'cli-team', version: '0.1.0' });
+const server = new McpServer({ name: 'cli-team', version: '0.1.1' });
 function tool(name, description, shape, handler) {
   server.tool(name, description, shape, async (input) => {
     try {

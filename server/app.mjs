@@ -35,7 +35,7 @@ export function createApp(service, { controllerToken = '', desktopToken = '', de
     }
     next();
   });
-  app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'CLI Team', version: '0.1.0' }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, name: 'CLI Team', version: '0.1.1' }));
   app.get('/api/bootstrap', (req, res) => res.json(service.bootstrap({ includeArchived: req.query.archived === '1' })));
   installBusinessApi(app, service);
   const drafts = new UiDrafts(service);

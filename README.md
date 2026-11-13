@@ -11,13 +11,13 @@
 <p align="center">
   <a href="#快速开始"><img alt="下载 Windows 版" src="https://img.shields.io/badge/下载-Windows_x64-2563eb?style=for-the-badge&logo=windows11&logoColor=white"></a>
   <a href="#快速开始"><img alt="快速开始" src="https://img.shields.io/badge/快速开始-2_分钟-0f766e?style=for-the-badge"></a>
-  <img alt="已发布版本 v0.1.0" src="https://img.shields.io/badge/已发布版本-v0.1.0-334155?style=for-the-badge">
+  <img alt="已发布版本 v0.1.1" src="https://img.shields.io/badge/已发布版本-v0.1.1-334155?style=for-the-badge">
   <img alt="数据保存在本地" src="https://img.shields.io/badge/数据-保存在本地-7c3aed?style=for-the-badge">
 </p>
 
 > 用一个目标调动多个官方 CLI。在同一项目中交代要求、查看团队接力、审阅完整成果；负责人安排派工与返工，程序保存版本和证据，最终发布由你确认。
 
-当前源码包含 **2026-11-13 日常工作台优化**。左侧选工作，右侧看一个下一步、对话和一份当前成果；其他待处理事项、历史成果和团队过程按需展开。配置成员或账号后可通过顶部入口回到原草稿、原稿件。GitHub 已发布的 `v0.1.0` 下载包尚未包含本轮变化。最新验证范围见[日常工作台验证](docs/validation/2026-11-13-focused-workbench.md)，配置往返见[流程简化记录](docs/validation/2026-11-12-simpler-workflow.md)，底层协作见[业务升级记录](docs/validation/2026-11-12-team-upgrade.md)。
+当前源码包含 **2026-11-13 日常工作台优化**。左侧选工作，右侧看一个下一步、对话和一份当前成果；其他待处理事项、历史成果和团队过程按需展开。配置成员或账号后可通过顶部入口回到原草稿、原稿件。GitHub [v0.1.1 下载包](https://github.com/D2spacit0/CLI-team/releases/tag/v0.1.1)已包含这些变化。发布与压缩包核验见[桌面发布记录](docs/validation/2026-11-13-release-v0.1.1.md)，界面验证范围见[日常工作台验证](docs/validation/2026-11-13-focused-workbench.md)，配置往返见[流程简化记录](docs/validation/2026-11-12-simpler-workflow.md)，底层协作见[业务升级记录](docs/validation/2026-11-12-team-upgrade.md)。
 
 ## 一张图看懂
 
@@ -105,12 +105,12 @@ CLI Team 继续使用现有 Node、SQLite、React 和官方 CLI 执行层；本�
 
 ## 快速开始
 
-**下面的下载步骤适用于已发布的 `v0.1.0`，该包仍是旧界面。** 要使用上方新版界面，请展开本节下方的「从源码运行与打包」。
+**当前 Windows 下载版为 `v0.1.1`，包含上方工作台界面。** 源码运行与本地打包方法见本节下方。
 
-1. 从 [Releases](https://github.com/D2spacit0/CLI-team/releases/latest) 下载 `CLI-Team-v0.1.0-win32-x64-release.zip`。
+1. 从 [Releases](https://github.com/D2spacit0/CLI-team/releases/latest) 下载 `CLI-Team-v0.1.1-win32-x64-release.zip`，同页提供 `.sha256` 校验文件。
 2. 解压并保留整个 `CLI Team-win32-x64` 目录。
 3. 运行 `CLI Team.exe`，在“工作区设置 → 主控与协作团队”中配置主控、成员和检查程序。
-4. 安装并登录准备使用的官方 CLI，然后点击“交给主控”提交第一个目标。
+4. 安装并登录准备使用的官方 CLI，然后点击“开始新工作”交代第一个目标。
 
 桌面包已包含 Electron 和 Node.js 24，不需要另外安装 Node.js。程序目前未签名，Windows 可能显示 SmartScreen 提示。
 
