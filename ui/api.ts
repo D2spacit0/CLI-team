@@ -20,6 +20,7 @@ import type {
   PublicationPreview,
   BusinessConnection,
   ContentSchedule,
+  ContentRevision,
 } from './types';
 
 export class ApiError extends Error {
@@ -88,7 +89,7 @@ export const api = {
   requestContentRevision: (contentId: string, data: { versionId: string; feedback: string; requestId: string }) =>
     request(`/api/content/${encodeURIComponent(contentId)}/revision-requests`, { method: 'POST', body: JSON.stringify(data) }),
   setContentSchedule: (contentId: string, data: ContentSchedule & { versionId: string; visibility: string }) =>
-    request(`/api/content/${encodeURIComponent(contentId)}/schedule`, { method: 'PUT', body: JSON.stringify(data) }),
+    request<ContentRevision>(`/api/content/${encodeURIComponent(contentId)}/schedule`, { method: 'PUT', body: JSON.stringify(data) }),
   revokePublication: (id: string) => request(`/api/publications/${encodeURIComponent(id)}/revoke`, { method: 'POST', body: '{}' }),
   reconcilePublication: (id: string, noteUrl?: string) => request(`/api/publications/${encodeURIComponent(id)}/reconcile`, {
     method: 'POST', body: JSON.stringify(noteUrl ? { noteUrl } : {}),

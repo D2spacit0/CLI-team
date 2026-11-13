@@ -13,7 +13,7 @@ const subscribeViewport = (notify: () => void) => {
 };
 const focusable = (element: HTMLElement | null): element is HTMLElement => Boolean(element?.isConnected
   && !element.closest('[inert], [hidden], [aria-hidden="true"]')
-  && !element.matches(':disabled') && element.getClientRects().length);
+  && !element.matches(':disabled') && element.getClientRects().length && getComputedStyle(element).visibility === 'visible');
 
 export function useInspectorOverlay({ workspace, inspector, projectId, shown, empty }: {
   workspace: RefObject<HTMLDivElement | null>; inspector: RefObject<HTMLElement | null>;
@@ -37,7 +37,7 @@ export function useInspectorOverlay({ workspace, inspector, projectId, shown, em
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const entered = coversConversation && (!before.coversConversation || projectId !== before.projectId
       || (coversIndex && !before.coversIndex));
-    const closed = before.coversConversation && !visible;
+    const closed = before.visible && !visible;
     previous.current = { coversConversation, coversIndex, visible, projectId, inspector: pane };
     // Other dialogs, including the image viewer, own focus while this workspace is inert.
     if (workspace.current?.closest('[inert]')) return;
@@ -51,10 +51,18 @@ export function useInspectorOverlay({ workspace, inspector, projectId, shown, em
         || pane.querySelector<HTMLElement>('.team-inspector-nav button[aria-pressed="true"]');
       (focusable(target) ? target : pane).focus({ preventScroll: true });
     } else if (closed && (!active || active === document.body || before.inspector?.contains(active))) {
-      const saved = restoreTo.current;
-      const target = saved && saved.projectId === projectId && focusable(saved.element) ? saved.element
-        : workspace.current?.querySelector<HTMLElement>('.team-reopen-inspector, [aria-label="告诉负责人新的要求"], [aria-label="搜索当前项目"]') || null;
-      if (focusable(target)) target.focus({ preventScroll: true });
+      const host = workspace.current;
+      const frame = requestAnimationFrame(() => {
+        if (!host?.isConnected || workspace.current !== host || host.closest('[inert]')) return;
+        const current = document.activeElement;
+        if (current && current !== document.body && !before.inspector?.contains(current)) return;
+        if ([...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]')].some(focusable)) return;
+        const saved = restoreTo.current;
+        const target = saved && saved.projectId === projectId && focusable(saved.element) ? saved.element
+          : [...host.querySelectorAll<HTMLElement>('.team-reopen-inspector, [aria-label="告诉负责人新的要求"], [aria-label="搜索当前项目"]')].find(focusable) || null;
+        if (focusable(target)) target.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, [coversConversation, coversIndex, visible, projectId, workspace, inspector]);
 

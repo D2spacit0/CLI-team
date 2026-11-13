@@ -1,0 +1,23 @@
+.business-settings-stack { display: grid; gap: 20px; min-width: 0; }
+.business-settings-stack > .settings-group { margin-bottom: 0; }
+.business-settings-stack [data-business-settings-section] { scroll-margin-top: 20px; }
+.business-settings-project-context { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; font-size: 12px; color: var(--wb-muted); }
+.business-settings-project-context strong { color: var(--wb-text); overflow-wrap: anywhere; }
+.business-settings-project-context > span { width: 100%; font-size: 11px; }
+.business-connection-next { padding: 16px; border-left: 2px solid var(--wb-accent); background: var(--wb-surface-subtle); }
+.business-connection-next > span { color: var(--wb-muted); font-size: 11px; }
+.business-connection-next h3 { margin: 6px 0; font-size: 14px; color: var(--wb-text); line-height: 1.6; }
+.business-connection-next > p { color: var(--wb-muted); font-size: 12px; line-height: 1.8; margin: 0 0 13px; }
+.business-settings-details { border-top: 1px solid var(--wb-border-subtle); }
+.business-settings-details > summary { cursor: pointer; padding: 13px 0; color: var(--wb-text); font-size: 12px; }
+.business-settings-details > .business-connection-actions { margin-bottom: 14px; }
+.business-settings-stack :is(button, select, input, summary, [data-business-settings-section]):focus-visible { outline: 2px solid var(--wb-accent); outline-offset: 3px; }
+.business-settings-stack .business-form-actions { flex-wrap: wrap; gap: 12px; }
+.business-settings-stack .business-connection-details > div { min-width: min(180px, 100%); }
+@media (max-width: 600px) {
+  .business-settings-stack { gap: 14px; }
+  .business-settings-stack .business-section-heading { flex-wrap: wrap; gap: 12px; }
+  .business-settings-stack .business-settings-fields { grid-template-columns: minmax(0, 1fr); }
+  .business-settings-stack .business-connection-actions .btn { white-space: normal; }
+  .business-connection-next { padding: 13px; }
+}

@@ -294,7 +294,7 @@ export interface ContentRevision {
 }
 export interface ContentEligibility {
   id: string; contentId?: string; versionId: string; revision: number;
-  status: 'pending' | 'eligible' | 'invalid'; reason?: string;
+  status: 'pending' | 'eligible' | 'invalid'; reason?: string; valid?: boolean;
   checkIds: string[]; reviewIds: string[]; checkId?: string; reviewId?: string;
 }
 export interface ContentFinding { code?: string; message: string; severity?: string }
@@ -358,7 +358,7 @@ export interface PublicationPreview {
   approvalDigest: string; canApprove: boolean; blockers: string[]; account: BusinessAccount | null;
   timeWindow: { kind: string; startsAt: string | null; endsAt: string | null; display: string };
   payload: { title: string; body: string; tags: string[]; images: Array<Pick<ContentImage, 'sha256' | 'width' | 'height' | 'mime'> & { index?: number }>; visibility: string };
-  connector: { version?: string; status: string; capabilities?: Record<string, boolean | string | null> };
+  connector: BusinessConnection;
   eligibility?: ContentEligibility; checks?: ContentCheck[]; reviews?: ContentReview[];
   approval: PublicationApproval | null; attempt: PublicationAttempt | null;
 }

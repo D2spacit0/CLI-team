@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessagesSquare, CheckSquare, Users, FolderArchive, Settings as SettingsIcon, Monitor, Archive, AlertCircle, FlaskConical, FolderOpen, Send, History, MoreHorizontal, Radio } from 'lucide-react';
+import { MessagesSquare, Users, FolderArchive, Settings as SettingsIcon, Monitor, Archive, AlertCircle, FlaskConical, FolderOpen, Send, History, MoreHorizontal, Radio } from 'lucide-react';
 import type { Bootstrap, BusinessSnapshot } from '../../types';
 import { publicationGroup } from '../../projects/businessState';
 
@@ -9,9 +9,10 @@ declare global {
 
 export type WorkbenchTab = 'projects' | 'publications' | 'rooms' | 'tasks' | 'members' | 'attention' | 'artifacts' | 'settings' | 'external' | 'archive' | 'fixtures';
 
-export function WorkbenchNav({ activeTab, mobileNavOpen, bootstrap, business, onTabChange }: {
+export function WorkbenchNav({ activeTab, mobileNavOpen, bootstrap, business, onTabChange, covered = false }: {
   activeTab: WorkbenchTab; mobileNavOpen: boolean; bootstrap: Bootstrap | null; business?: BusinessSnapshot;
   onTabChange: (tab: WorkbenchTab) => void;
+  covered?: boolean;
 }) {
   const legacyTab = !['projects', 'publications', 'tasks', 'settings'].includes(activeTab);
   const [moreOpen, setMoreOpen] = useState(legacyTab);
@@ -34,14 +35,13 @@ export function WorkbenchNav({ activeTab, mobileNavOpen, bootstrap, business, on
   ];
   const tools = [
     { tab: 'rooms' as const, label: '团队讨论', icon: MessagesSquare },
-    { tab: 'tasks' as const, label: '任务看板', icon: CheckSquare },
     { tab: 'attention' as const, label: '待我处理', icon: AlertCircle },
     { tab: 'members' as const, label: '成员管理', icon: Users },
     { tab: 'artifacts' as const, label: '产物文件', icon: FolderArchive },
     { tab: 'external' as const, label: '外部会话', icon: Monitor },
     { tab: 'archive' as const, label: '归档记录', icon: Archive },
   ];
-  return <nav id="workbench-navigation" className={`app-sidebar business-main-nav ${mobileNavOpen ? 'open' : ''}`} aria-label="主功能导航" inert={mobileLayout && !mobileNavOpen} aria-hidden={mobileLayout && !mobileNavOpen || undefined}>
+  return <nav id="workbench-navigation" className={`app-sidebar business-main-nav ${mobileNavOpen ? 'open' : ''}`} aria-label="主功能导航" inert={covered || mobileLayout && !mobileNavOpen} aria-hidden={covered || mobileLayout && !mobileNavOpen || undefined}>
     <div className="nav-group">{mainItems.map(({ tab, label, icon: Icon, count }) => <button key={tab} className={`nav-item ${activeTab === tab ? 'active' : ''}`} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => onTabChange(tab)}>
       <Icon size={18} /><span>{label}</span>{count > 0 && <span className="nav-badge">{count}</span>}
     </button>)}

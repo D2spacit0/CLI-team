@@ -81,7 +81,7 @@ export default function ManagedRequestDialog({ workspace, roomId, team, members,
   return <div className="modal-overlay" onClick={() => void leave(onClose)}>
     <form className="modal-content modal-lg" data-testid="managed-request" role="dialog" aria-modal="true" aria-labelledby="managed-request-title"
       onClick={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <div className="modal-header"><span className="modal-title" id="managed-request-title">交给主控</span>
+      <div className="modal-header"><span className="modal-title" id="managed-request-title">交代任务目标</span>
         <button type="button" className="btn btn-icon-only" disabled={busy} aria-label="关闭目标输入" onClick={() => void leave(onClose)}><X size={16} /></button></div>
       <div className="modal-body">
         <p className="text-muted">描述要完成的目标。主控负责拆解、分发、逐项审查、返工和最终交付。</p>
@@ -107,7 +107,7 @@ export default function ManagedRequestDialog({ workspace, roomId, team, members,
         <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void leave(onClose)}>稍后继续</button>
         <button type="submit" className="btn btn-primary" disabled={busy || !draft.loaded || !draft.values.objective.trim() || submissionBlocked}>
           <Send size={14} />{phase === 'saving' ? '正在保存目标' : phase === 'recovering' ? '正在恢复草稿'
-            : phase === 'submitting' ? '正在交给主控' : pending ? '重试同一请求' : '交给主控执行'}</button></div>
+            : phase === 'submitting' ? '正在安排任务' : pending ? '重试同一请求' : '开始这项任务'}</button></div>
     </form>
   </div>;
 }

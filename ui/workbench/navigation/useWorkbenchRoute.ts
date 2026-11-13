@@ -22,6 +22,7 @@ export interface RouteState {
   contentId?: string | null;
   versionId?: string | null;
   focusId?: string | null;
+  returnTo?: string | null;
 }
 
 interface NavigateOptions {
@@ -32,6 +33,7 @@ interface NavigateOptions {
   roomId?: string | null;
   taskId?: string | null;
   panel?: string | null;
+  returnTo?: string | null;
   replace?: boolean;
 }
 
@@ -39,6 +41,21 @@ const decodeId = (value?: string): string | null => {
   if (!value) return null;
   try { return decodeURIComponent(value); } catch { return null; }
 };
+
+export function businessReturnHash(value?: string | null): string | null {
+  if (!value || value.length > 2048 || !/^#\/(?:projects(?:\/[^/?#]+)?|publications)(?:\?[^#]*)?$/.test(value)) return null;
+  const [pathname, query] = value.slice(2).split('?');
+  const [view, encodedProject] = pathname.split('/');
+  const projectId = encodedProject ? decodeId(encodedProject) : null;
+  if (encodedProject && !projectId) return null;
+  const params = new URLSearchParams(query || '');
+  const panel = params.get('panel');
+  return routeHash(view as 'projects' | 'publications', {
+    projectId: view === 'projects' ? projectId : params.get('project'),
+    contentId: params.get('content'), versionId: params.get('version'), focusId: params.get('focus'),
+    panel: panel && ['create', 'conversation', 'content', 'resources', 'recap', 'team'].includes(panel) ? panel : null,
+  });
+}
 
 export function routeHash(view: WorkbenchView, options?: Omit<NavigateOptions, 'replace'>): string {
   let hash = `#/${view}`;
@@ -60,7 +77,9 @@ export function routeHash(view: WorkbenchView, options?: Omit<NavigateOptions, '
   if (options?.contentId) queryParts.push(`content=${encodeURIComponent(options.contentId)}`);
   if (options?.versionId) queryParts.push(`version=${encodeURIComponent(options.versionId)}`);
   if (options?.focusId) queryParts.push(`focus=${encodeURIComponent(options.focusId)}`);
-  if (view === 'publications' && options?.projectId) queryParts.push(`project=${encodeURIComponent(options.projectId)}`);
+  if (['publications', 'settings', 'members'].includes(view) && options?.projectId) queryParts.push(`project=${encodeURIComponent(options.projectId)}`);
+  const returnTo = ['settings', 'members'].includes(view) ? businessReturnHash(options?.returnTo) : null;
+  if (returnTo) queryParts.push(`return=${encodeURIComponent(returnTo)}`);
   return queryParts.length > 0 ? hash + '?' + queryParts.join('&') : hash;
 }
 
@@ -109,12 +128,14 @@ export function parseHash(hash: string, search = window.location.search): RouteS
     roomId,
     taskId,
     panel: params.get('panel'),
-    ...(['projects', 'publications'].includes(view) ? {
+    ...(['projects', 'publications', 'settings', 'members'].includes(view) ? {
       projectId: view === 'projects' ? decodeId(segments[1]) : params.get('project'),
       contentId: params.get('content'),
       versionId: params.get('version'),
       focusId: params.get('focus'),
     } : {}),
+    ...(['settings', 'members'].includes(view) && businessReturnHash(params.get('return'))
+      ? { returnTo: businessReturnHash(params.get('return')) } : {}),
   };
 }
 

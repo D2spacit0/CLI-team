@@ -6,12 +6,13 @@ import { useTaskDraft } from '../taskDrafts';
 import { BusinessNotice, ContentCard } from './BusinessComponents';
 import { businessTime, metricDisplay, metricValues, publicationGroup, safeSourceUrl } from './businessState';
 import type { ProjectPanel } from './projectWorkspaceState';
+import type { ProjectSettingsSection } from './projectDailyStatus';
 export { default } from './ProjectConversation';
 
 export interface ProjectHomeProps {
   project: BusinessProject; bootstrap: Bootstrap; state: BusinessSnapshot;
   onRefresh: () => Promise<void>; onOpenContent: (id: string, versionId?: string) => void;
-  onSettings: () => void; onBusy: (busy: boolean) => void;
+  onSettings: (section?: ProjectSettingsSection) => void; onBusy: (busy: boolean) => void;
   onShowPanel?: (panel: ProjectPanel) => void; onFocus?: (id: string) => void;
   focusId?: string | null; focusNonce?: number; selectedContentId?: string | null; covered?: boolean;
 }

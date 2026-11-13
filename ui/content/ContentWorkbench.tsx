@@ -5,13 +5,15 @@ import { api } from '../api';
 import type { Bootstrap, BusinessProject, BusinessSnapshot, ContentItem, ContentRevision, PublicationPreview } from '../types';
 import { useTaskDraft } from '../taskDrafts';
 import { BusinessBadge, BusinessNotice, CollaborationHistory } from '../projects/BusinessComponents';
-import { businessTime, contentGateSummary, contentState, currentContentVersion, itemEligibility, latestAttempt, revisionChanges, safeSourceUrl, unresolvedSubmission } from '../projects/businessState';
+import { businessTime, contentGateSummary, contentState, currentContentVersion, itemEligibility, publicationAttemptForDisplay, revisionChanges, safeSourceUrl, unresolvedSubmission } from '../projects/businessState';
+import { publicationAccountReady } from '../projects/businessSettingsState';
+import { contentNextStep } from './contentNextStep';
 import './content-workbench.css';
 
 export default function ContentWorkbench({ item, project, state, bootstrap, dataRevision, onRefresh, onBack, onSettings, onBusy,
   embedded = false, requestedVersionId, onVersionChange }: {
   item: ContentItem; project: BusinessProject; state: BusinessSnapshot; bootstrap: Bootstrap; dataRevision: number;
-  onRefresh: () => Promise<void>; onBack: () => void; onSettings: () => void; onBusy: (busy: boolean) => void;
+  onRefresh: () => Promise<void>; onBack: () => void; onSettings: (section?: 'account' | 'team' | 'runtime') => void; onBusy: (busy: boolean) => void;
   embedded?: boolean; requestedVersionId?: string | null; onVersionChange?: (versionId: string) => void;
 }) {
   const [versionId, setVersionId] = useState(() => requestedVersionId || currentContentVersion(item) || '');
@@ -25,32 +27,40 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
   const [sideTab, setSideTab] = useState<'reviews' | 'collaboration' | 'versions'>('reviews');
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
   const [imageIndex, setImageIndex] = useState<number | null>(null);
   const [imageStates, setImageStates] = useState<Record<string, boolean>>({});
   const [imageReloadKey, setImageReloadKey] = useState(0);
   const [noteUrl, setNoteUrl] = useState('');
   const sequence = useRef(0);
   const lock = useRef(false);
+  const evidencePanel = useRef<HTMLDetailsElement>(null);
+  const scopePanel = useRef<HTMLElement>(null);
+  const reconciliationPanel = useRef<HTMLElement>(null);
+  const revisionRequestForm = useRef<HTMLFormElement>(null);
   const versions = state.contentRevisions.filter((entry) => entry.contentId === item.id).sort((a, b) => b.revision - a.revision);
   const selected = versions.find((entry) => entry.id === versionId) || null;
   const revision = preview?.versionId === versionId && preview.revision?.id === versionId ? preview.revision : selected;
   const previous = revision?.parentId ? versions.find((entry) => entry.id === revision.parentId) || null : null;
   const stale = versionId !== currentContentVersion(item);
-  const attempt = preview?.attempt || latestAttempt(state, item.id);
+  const attempt = publicationAttemptForDisplay(preview?.attempt ? [preview.attempt, ...state.attempts] : state.attempts, item.id);
   const submitting = attempt?.status === 'sending';
-  const uncertain = unresolvedSubmission(attempt);
+  const uncertain = !submitting && unresolvedSubmission(attempt);
   const submissionFrozen = submitting || uncertain;
+  const published = attempt?.status === 'published' || item.status === 'published';
   const verificationId = attempt?.id || preview?.approval?.id;
   const payload = preview?.versionId === versionId ? preview.payload : revision ? { title: revision.title, body: revision.body, tags: revision.tags, images: revision.images, visibility: revision.visibility } : null;
-  const eligibility = preview?.eligibility || itemEligibility(state, item);
+  const stateEligibility = itemEligibility(state, item);
+  const previewEligibility = preview?.versionId === versionId ? preview.eligibility : null;
+  const eligibility = stateEligibility && (!previewEligibility || stateEligibility.revision >= previewEligibility.revision) ? stateEligibility : previewEligibility;
   const checks = preview?.checks || state.contentChecks.filter((entry) => entry.contentId === item.id);
   const reviews = preview?.reviews || state.reviews.filter((entry) => entry.contentId === item.id);
-  const gates = revision ? contentGateSummary(revision, eligibility, checks, reviews) : null;
+  const gates = revision ? contentGateSummary(revision, eligibility, checks, reviews, project.reviewerId) : null;
   const draft = useTaskDraft(bootstrap.workspace.root, versionId ? { kind: 'content-revision-request', contentId: item.id, versionId } : null, { feedback: '', requestId: '' });
-  const refreshPreview = useCallback(async (quiet = false) => {
+  const refreshPreview = useCallback(async () => {
     if (!versionId) { setLoading(false); return; }
     const current = ++sequence.current;
-    if (!quiet) setLoading(true);
+    setLoading(true);
     try {
       const result = await api.getPublicationPreview(item.id, versionId);
       if (current !== sequence.current) return;
@@ -59,19 +69,27 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
     } catch (reason) { if (current === sequence.current) setPreviewError(reason instanceof Error ? reason.message : '整稿读取失败'); }
     finally { if (current === sequence.current) setLoading(false); }
   }, [item.id, versionId]);
-  useEffect(() => { setPreview(null); setPreviewError(''); void refreshPreview(); return () => { sequence.current++; }; }, [refreshPreview]);
-  useEffect(() => { void refreshPreview(true); }, [dataRevision]);
+  useEffect(() => { setPreview(null); setPreviewError(''); }, [item.id, versionId]);
+  useEffect(() => { void refreshPreview(); return () => { sequence.current++; }; }, [refreshPreview, dataRevision]);
   useEffect(() => {
     if (!versionId && currentContentVersion(item)) setVersionId(currentContentVersion(item)!);
   }, [item, versionId]);
   useEffect(() => {
     if (requestedVersionId && requestedVersionId !== versionId && !lock.current) {
-      setVersionId(requestedVersionId); setImageIndex(null); setShowRevisionForm(false);
+      sequence.current++; setPreview(null); setLoading(true); setPreviewError('');
+      setVersionId(requestedVersionId); setImageIndex(null); setShowRevisionForm(false); setShowSchedule(false);
     }
-  }, [requestedVersionId]);
+  }, [requestedVersionId, busy]);
   const selectVersion = (next: string) => {
-    setVersionId(next); setImageIndex(null); setShowRevisionForm(false); onVersionChange?.(next);
+    if (!next || next === versionId) return;
+    sequence.current++; setPreview(null); setLoading(true); setPreviewError('');
+    setVersionId(next); setImageIndex(null); setShowRevisionForm(false); setShowSchedule(false); onVersionChange?.(next);
   };
+  useEffect(() => {
+    if (!showRevisionForm || !draft.loaded) return;
+    revisionRequestForm.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    revisionRequestForm.current?.querySelector('textarea')?.focus({ preventScroll: true });
+  }, [showRevisionForm, draft.loaded]);
   useEffect(() => () => onBusy(false), []);
   const run = async (name: string, operation: () => Promise<void>) => {
     if (lock.current) return;
@@ -86,11 +104,41 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
     ...(preview?.blockers || []),
     ...(!hasDesktopApproval ? ['请在桌面工作台完成最终发布确认。'] : []),
     ...(stale ? ['当前正在查看旧版本，请先查看最新整稿。'] : []),
-    ...(project.status !== 'active' || bootstrap.workspace.paused ? ['项目或工作区已暂停，请恢复后再批准发布。'] : []),
+    ...(project.status !== 'active' ? [project.status === 'archived' ? '项目已归档。' : '项目有暂停或待处理条件，请返回项目查看。'] : []),
+    ...(bootstrap.workspace.paused ? ['工作区已暂停新增工作，请查看运行设置。'] : []),
     ...(previewError ? ['当前整稿状态未能刷新，批准已暂停。'] : []),
-    ...(payload?.images.length && !imagesReady ? ['配图尚未完整显示，请等待加载或刷新后确认。'] : []),
+    ...(!imagesReady ? ['配图尚未完整显示，请等待加载或刷新后确认。'] : []),
   ];
-  const canApprove = Boolean(preview?.canApprove && preview.approvalDigest && gates?.machinePassed && gates?.reviewPassed && !blockers.length && !loading && !submissionFrozen);
+  const approvalQueued = Boolean(preview?.approval?.versionId === versionId && ['approved', 'queued'].includes(preview.approval.status));
+  const canApprove = Boolean(preview?.versionId === versionId && preview.canApprove && preview.approvalDigest && gates?.eligible &&
+    !blockers.length && !loading && !submissionFrozen && !published && !approvalQueued);
+  const accountReady = publicationAccountReady(project, preview);
+  const scopeBlockedReason = payload?.visibility !== 'public' ? '当前连接器尚未验证非公开发布，请选择已支持的范围再审查。'
+    : preview?.timeWindow?.endsAt && Date.parse(preview.timeWindow.endsAt) <= Date.now() ? '原发布时间已过，请重新排期并确认新版本。' : undefined;
+  const nextStep = contentNextStep({ canApprove, submitting, uncertain, published, stale, loading, previewError: Boolean(previewError),
+    workspacePaused: bootstrap.workspace.paused, projectStatus: project.status, accountReady, hasReviewer: Boolean(project.reviewerId), gates,
+    imagesReady, hasDesktopApproval, approvalQueued, reviewerName: bootstrap.members.find(member => member.id === project.reviewerId)?.name,
+    reason: eligibility?.reason || preview?.blockers?.[0], scopeBlockedReason });
+  const showInspection = () => {
+    setShowEvidence(true); setSideTab('reviews');
+    evidencePanel.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+    evidencePanel.current?.querySelector('summary')?.focus({ preventScroll: true });
+  };
+  const refreshManuscript = () => {
+    setImageStates({}); setImageReloadKey(value => value + 1); void refreshPreview();
+  };
+  const takeNextStep = () => {
+    switch (nextStep.action) {
+      case 'approve': void approve(); break;
+      case 'refresh': refreshManuscript(); break;
+      case 'latest': selectVersion(currentContentVersion(item) || ''); break;
+      case 'account': case 'team': case 'runtime': onSettings(nextStep.action); break;
+      case 'conversation': onBack(); break;
+      case 'evidence': showInspection(); break;
+      case 'schedule': setShowSchedule(true); scopePanel.current?.focus({ preventScroll: true }); scopePanel.current?.scrollIntoView({ block: 'start', behavior: 'instant' }); break;
+      case 'reconcile': reconciliationPanel.current?.focus({ preventScroll: true }); reconciliationPanel.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' }); break;
+    }
+  };
   const approve = () => run('approval', async () => {
     if (!preview || !canApprove || !window.cliTeamDesktop) return;
     const receipt = await window.cliTeamDesktop.requestPublicationApproval(item.id, versionId, preview.approvalDigest);
@@ -128,10 +176,10 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
       <div><span>{project.name}</span><h1>整稿与发布确认</h1></div><BusinessBadge {...contentState(state, item)} /></div>
       <div className="business-header-actions"><select className="form-select business-version-select" aria-label="查看稿件版本" disabled={busy} value={versionId} onChange={(event) => selectVersion(event.target.value)}>
         {!versions.length && <option value="">尚未形成版本</option>}{versions.map((entry) => <option key={entry.id} value={entry.id}>版本 {entry.revision}{entry.id === currentContentVersion(item) ? ' · 当前' : ' · 历史'}</option>)}</select>
-        <button className="btn btn-secondary btn-icon-only" disabled={busy || loading} aria-label="刷新整稿状态" title="刷新整稿状态" onClick={() => { setImageStates({}); setImageReloadKey((value) => value + 1); void refreshPreview(); }}><RefreshCw size={14} /></button></div>
+        <button className="btn btn-secondary btn-icon-only" disabled={busy || loading} aria-label="刷新整稿状态" title="刷新整稿状态" onClick={refreshManuscript}><RefreshCw size={14} /></button></div>
     </header>
     <div className="business-content-scroll">
-      {stale && <BusinessNotice action={<button className="btn btn-sm btn-secondary" disabled={busy} onClick={() => selectVersion(currentContentVersion(item) || '')}>查看最新整稿</button>}>团队已经更新稿件。当前展示的历史版本不能继续批准。</BusinessNotice>}
+      {stale && <BusinessNotice action={<button className="btn btn-sm btn-secondary" disabled={busy} onClick={() => selectVersion(currentContentVersion(item) || '')}>打开当前版本</button>}>团队已经更新稿件。当前展示的历史版本不能继续批准。</BusinessNotice>}
       {previewError && <BusinessNotice tone="danger" action={<button className="btn btn-sm btn-secondary" disabled={loading} onClick={() => void refreshPreview()}>重试读取</button>}>{previewError}</BusinessNotice>}
       {(error || notice) && <BusinessNotice tone={error ? 'danger' : 'ready'}>{error || notice}</BusinessNotice>}
       {submissionFrozen && <BusinessNotice><strong>{submitting ? '这篇稿件已经开始提交。' : '这篇稿件可能已经提交，结果待核实。'}</strong> 原批准版本保持冻结，恢复连接只会继续回读，不会重新发文。{attempt?.verificationBlocked && <p>{attempt.verificationBlocked}</p>}</BusinessNotice>}
@@ -151,13 +199,23 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
             <footer className="business-proof-footer"><span>{Array.from(payload.title).length} 字标题 · {Array.from(payload.body).length} 字正文 · {payload.images.length} 张图片</span><span>上方展示的是规范化后的发布内容</span></footer>
           </section>
           <aside className="business-content-inspection" aria-label="本版检查、审稿与发布授权">
-            <section className="business-publish-scope"><h2>发布范围</h2><dl><div><dt>账号</dt><dd>{preview?.account?.name || preview?.account?.label || project.account?.name || '尚未接入账号'}</dd></div>
+            <section ref={scopePanel} tabIndex={-1} className="business-publish-scope"><h2>发布范围</h2><dl><div><dt>账号</dt><dd>{preview?.account?.name || preview?.account?.label || project.account?.name || '尚未接入账号'}</dd></div>
               <div><dt>可见范围</dt><dd>{visibilityLabel(payload.visibility)}</dd></div><div><dt>执行时间</dt><dd>{preview?.timeWindow?.display || '批准后 10 分钟内'}</dd></div></dl>
-              {!submissionFrozen && <button className="business-text-button" disabled={busy || stale} onClick={() => setShowSchedule((value) => !value)}><Clock3 size={13} />{showSchedule ? '收起排期' : '调整发布时间与范围'}</button>}
-              {showSchedule && <ScheduleForm revision={revision} disabled={busy || stale} onSave={(values) => run('schedule', async () => {
-                await api.setContentSchedule(item.id, { versionId, ...values }); await onRefresh(); await refreshPreview(); setShowSchedule(false); setNotice('发布范围已更新。请查看新版本后重新确认。');
+              <div className="business-scope-actions"><button className="business-text-button" disabled={busy} onClick={() => onSettings('account')}>接入发布账号</button>
+                {!submissionFrozen && !published && <button className="business-text-button" disabled={busy || stale} onClick={() => setShowSchedule((value) => !value)}><Clock3 size={13} />{showSchedule ? '收起排期' : '调整发布时间与范围'}</button>}</div>
+              {showSchedule && !submissionFrozen && !published && <ScheduleForm key={revision.id} revision={revision} disabled={busy || stale} onSave={(values) => run('schedule', async () => {
+                const next = await api.setContentSchedule(item.id, { versionId, ...values });
+                if (!next.id || next.contentId !== item.id || next.projectId !== project.id) throw new Error('新版整稿响应与当前项目不一致，请重新读取。');
+                await onRefresh(); selectVersion(next.id);
+                setNotice(`发布范围已更新，正在查看版本 ${next.revision}。原发布批准不再适用，请核对本版检查与审稿后重新确认。`);
               })} />}
             </section>
+            {gates && <div className="content-gate-overview" aria-label="本版检查与审稿摘要"><div><span>程序检查</span><BusinessBadge {...gates.machine} /></div><div><span>独立审稿</span><BusinessBadge {...gates.review} /></div></div>}
+            {gates?.stale && <p className="content-invalidation-notice" role="status">{eligibility?.reason || '账号、来源或稿件范围已变化，原检查与审稿已失效。'}</p>}
+            {preview?.approval && ['expired', 'revoked', 'invalid', 'invalidated'].includes(preview.approval.status) && <p className="content-invalidation-notice">{approvalLabel(preview.approval.status)}。{preview.approval.reason || '继续发布需要核对当前版本并重新确认。'}</p>}
+            <details ref={evidencePanel} className="content-evidence-details" open={showEvidence} onToggle={event => setShowEvidence(event.currentTarget.open)}>
+              <summary>检查、审稿与版本记录</summary>
+              {blockers.length > 0 && <section className="content-remaining-conditions"><h3>当前还需满足</h3><ul>{[...new Set(blockers)].map(blocker => <li key={blocker}>{blocker}</li>)}</ul></section>}
             <div className="business-inspection-tabs" role="tablist" aria-label="整稿检查与协作"><button role="tab" aria-selected={sideTab === 'reviews'} onClick={() => setSideTab('reviews')}>检查与审稿</button><button role="tab" aria-selected={sideTab === 'collaboration'} onClick={() => setSideTab('collaboration')}>协作与材料</button><button role="tab" aria-selected={sideTab === 'versions'} onClick={() => setSideTab('versions')}>版本改动</button></div>
             <div className="business-inspection-content">
               {sideTab === 'reviews' && <>
@@ -190,21 +248,23 @@ export default function ContentWorkbench({ item, project, state, bootstrap, data
                 <section className="business-evidence-section"><h3>版本记录</h3>{versions.map((entry) => <button className={`business-version-row ${entry.id === versionId ? 'active' : ''}`} key={entry.id} disabled={busy} onClick={() => selectVersion(entry.id)}><strong>版本 {entry.revision}</strong><span>{businessTime(entry.createdAt, project.timeZone)}</span>{entry.id === versionId && <Check size={13} />}</button>)}</section>
               </>}
             </div>
+            </details>
           </aside>
         </div>
-        {uncertain && <section className="business-reconcile-panel"><h2>核实本次发布</h2><p>可补充这篇笔记的链接，再由程序核对账号、正文与图片关联。链接本身不会被当成成功证据。</p>
+        {uncertain && <section ref={reconciliationPanel} tabIndex={-1} className="business-reconcile-panel"><h2>核实本次发布</h2><p>可补充这篇笔记的链接，再由程序核对账号、正文与图片关联。链接本身不会被当成成功证据。</p>
           <div className="business-reconcile-form"><input className="form-input" aria-label="需要核实的笔记链接" placeholder="笔记链接（选填）" value={noteUrl} disabled={busy} onChange={(event) => setNoteUrl(event.target.value)} /><button className="btn btn-secondary" disabled={busy || !verificationId} onClick={() => void reconcile()}><RefreshCw size={14} />{action === 'reconcile' ? '正在核实' : '回读核实'}</button></div>
         </section>}
         {attempt?.status === 'published' && <BusinessNotice tone="ready">平台身份与本版内容已核实。{attempt.evidence?.verifiedAt && <span> 核实时间：{businessTime(attempt.evidence.verifiedAt, project.timeZone)}。</span>}{safeSourceUrl(attempt.noteUrl || attempt.evidence?.noteUrl) && <a href={safeSourceUrl(attempt.noteUrl || attempt.evidence?.noteUrl)!} target="_blank" rel="noreferrer" className="business-published-link">查看已发布笔记 <ExternalLink size={13} /></a>}</BusinessNotice>}
-        {showRevisionForm && !submissionFrozen && <form className="business-revision-form" onSubmit={(event) => { event.preventDefault(); void revise(); }}><label className="form-group"><span className="form-label">希望团队怎样修改</span><textarea className="form-textarea" aria-label="希望团队怎样修改" rows={3} required maxLength={6000} disabled={busy || !draft.loaded || Boolean(draft.values.requestId)} value={draft.values.feedback || ''} placeholder="直接写一句修改要求，团队会将意见交给相关成员处理。" onChange={(event) => draft.setField('feedback', event.target.value)} /></label>
+        {showRevisionForm && !submissionFrozen && !published && <form ref={revisionRequestForm} className="business-revision-form" onSubmit={(event) => { event.preventDefault(); void revise(); }}><label className="form-group"><span className="form-label">希望团队怎样修改</span><textarea className="form-textarea" aria-label="希望团队怎样修改" rows={3} required maxLength={6000} disabled={busy || !draft.loaded || Boolean(draft.values.requestId)} value={draft.values.feedback || ''} placeholder="直接写一句修改要求，团队会将意见交给相关成员处理。" onChange={(event) => draft.setField('feedback', event.target.value)} /></label>
           {draft.error && <BusinessNotice tone="danger">{draft.error}</BusinessNotice>}<div className="business-form-actions"><span className="business-muted">修改要求绑定当前查看的版本 {revision.revision}</span><button className="btn btn-primary" disabled={busy || !draft.loaded || !draft.values.feedback?.trim() || stale} type="submit">{action === 'revision' ? '正在交给团队' : draft.values.requestId ? '核对并重试' : '退回团队修改'}</button></div></form>}
       </>}
     </div>
     {payload && revision && <footer className="business-publication-actions" data-approval-ready={canApprove}>
-      <div className="content-authorization-summary"><span className="content-authorization-label"><LockKeyhole size={12} />最终发布授权</span>{!submissionFrozen && blockers.length > 0 ? <><strong>发布条件尚未满足</strong><p>{[...new Set(blockers)].slice(0, 3).join(' ')}</p>{!project.account && <button className="business-text-button" onClick={onSettings}>去接入发布账号</button>}</> : <><strong>{submissionFrozen ? '本次提交只进行核实' : preview?.canApprove ? '整稿已具备送审条件' : '等待完成检查与审稿'}</strong><p>{submissionFrozen ? '没有重新发文入口。' : '批准将打开桌面最终确认，核对账号、版本与发布时间。'}</p></>}</div>
-      <div className="business-action-buttons">{preview?.approval && ['approved', 'queued'].includes(preview.approval.status) && !submissionFrozen ? <button className="btn btn-secondary" disabled={busy} onClick={() => void revoke()}>撤销未执行批准</button> : null}
-        {!submissionFrozen && <button className="btn btn-secondary" disabled={busy || stale || attempt?.status === 'published'} onClick={() => setShowRevisionForm((value) => !value)}>{showRevisionForm ? '收起修改要求' : '退回修改'}</button>}
-        <button className="btn btn-primary business-approve-button" disabled={busy || !canApprove} onClick={() => void approve()}><ShieldCheck size={16} />{action === 'approval' ? '等待最终确认' : '批准本版发布'}</button></div>
+      <div className="content-authorization-summary"><span className="content-authorization-label">{canApprove && <LockKeyhole size={12} />}下一步</span><strong>{nextStep.title}</strong><p>{nextStep.detail}</p></div>
+      <div className="business-action-buttons">{approvalQueued && !submissionFrozen && !published ? <button className="btn btn-secondary" disabled={busy} onClick={() => void revoke()}>撤销未执行批准</button> : null}
+        {!submissionFrozen && !published && <button className="btn btn-secondary" disabled={busy || stale || project.status === 'archived'} onClick={() => setShowRevisionForm((value) => !value)}>{showRevisionForm ? '收起修改要求' : '退回修改'}</button>}
+        {canApprove ? <button className="btn btn-primary business-approve-button" disabled={busy} onClick={() => void approve()}><ShieldCheck size={16} />{action === 'approval' ? '等待最终确认' : '批准本版发布'}</button>
+          : <button className="btn btn-primary business-next-step-button" disabled={busy || nextStep.action === 'refresh' && loading} onClick={takeNextStep}>{nextStep.actionLabel}</button>}</div>
     </footer>}
     {imageIndex !== null && payload && revision && <ImageLightbox contentId={item.id} versionId={versionId} title={payload.title} index={imageIndex} count={payload.images.length} onIndex={setImageIndex} onClose={closeImage} />}
   </div>;

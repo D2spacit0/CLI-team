@@ -131,6 +131,16 @@
 .content-review-dock .business-publish-scope dt { width: auto; color: var(--wb-muted); }
 .content-review-dock .business-publish-scope dd { color: var(--wb-text); }
 .content-review-dock .business-publish-scope .business-text-button { font-size: 11px; line-height: 1.6; }
+.content-review-dock .business-scope-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.content-review-dock .content-gate-overview { display: grid; gap: 10px; padding: 16px 18px; }
+.content-review-dock .content-gate-overview > div { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 7px; }
+.content-review-dock .content-gate-overview > div > span:first-child { color: var(--wb-muted); font-size: 11px; }
+.content-review-dock .content-invalidation-notice { margin: 0 18px 14px; padding-left: 10px; border-left: 2px solid var(--wb-warning); color: var(--wb-warning); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.content-review-dock .content-evidence-details { border-top: 1px solid var(--dock-border); }
+.content-review-dock .content-evidence-details > summary { cursor: pointer; padding: 15px 18px; color: var(--wb-text); font-size: 12px; }
+.content-review-dock .content-remaining-conditions { padding: 0 18px 15px; }
+.content-review-dock .content-remaining-conditions h3 { margin: 0 0 8px; color: var(--wb-text); font-size: 11px; }
+.content-review-dock .content-remaining-conditions ul { margin: 0; padding-left: 16px; color: var(--wb-warning); font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
 .content-review-dock .business-inspection-tabs { padding: 0 12px; gap: 7px; border-color: var(--dock-border); background: var(--wb-surface-subtle); }
 .content-review-dock .business-inspection-tabs button { min-height: 42px; padding: 12px 3px; color: var(--wb-muted); font-size: 11px; white-space: nowrap; }
 .content-review-dock .business-inspection-tabs button:hover { color: var(--wb-text); }
@@ -202,7 +212,7 @@
 .content-review-dock .business-publication-actions strong { color: var(--wb-text); font-size: 12px; font-weight: 600; }
 .content-review-dock .business-publication-actions p { color: var(--wb-muted); font-size: 11px; line-height: 1.75; }
 .content-review-dock .business-action-buttons { gap: 8px; flex-wrap: wrap; max-width: none; }
-.content-review-dock .business-approve-button.btn {
+.content-review-dock :is(.business-approve-button, .business-next-step-button).btn {
   min-height: 40px;
   padding: 10px 17px;
   color: var(--wb-background);
@@ -213,8 +223,8 @@
   font-weight: 700;
   box-shadow: none;
 }
-.content-review-dock .business-approve-button.btn:hover:not(:disabled) { background: color-mix(in srgb, var(--wb-accent) 85%, var(--wb-text)); }
-.content-review-dock .business-approve-button.btn:disabled { opacity: 1; color: var(--wb-muted); background: var(--wb-surface); border-color: var(--dock-border); cursor: not-allowed; }
+.content-review-dock :is(.business-approve-button, .business-next-step-button).btn:hover:not(:disabled) { background: color-mix(in srgb, var(--wb-accent) 85%, var(--wb-text)); }
+.content-review-dock :is(.business-approve-button, .business-next-step-button).btn:disabled { opacity: 1; color: var(--wb-muted); background: var(--wb-surface); border-color: var(--dock-border); cursor: not-allowed; }
 .content-review-dock :is(button, select, input, textarea, summary, a):focus-visible { outline: 2px solid var(--wb-accent); outline-offset: 3px; }
 .content-review-dock .business-content-not-ready { min-height: 300px; padding: 35px 22px; color: var(--wb-muted); }
 .content-review-dock .business-content-not-ready > svg { color: var(--wb-accent); }
@@ -238,9 +248,11 @@
 .content-review-dock.team-embedded-manuscript .business-payload-body { margin-top: 0; font-size: 13px; line-height: 2; }
 .content-review-dock.team-embedded-manuscript .business-proof-footer { font-size: 10px; }
 .content-review-dock.team-embedded-manuscript .business-publish-scope dl { display: grid; }
-.content-review-dock.team-embedded-manuscript .business-publication-actions { padding: 16px; align-items: stretch; flex-direction: column; gap: 13px; }
+.content-review-dock.team-embedded-manuscript .business-publication-actions { padding: 13px 16px; align-items: stretch; flex-direction: column; gap: 10px; }
+.content-review-dock.team-embedded-manuscript .content-authorization-label { margin-bottom: 4px; }
+.content-review-dock.team-embedded-manuscript .content-authorization-summary p { margin-top: 4px; }
 .content-review-dock.team-embedded-manuscript .business-action-buttons { width: 100%; gap: 8px; }
-.content-review-dock.team-embedded-manuscript .business-action-buttons .business-approve-button { padding: 10px 14px; font-size: 12px; }
+.content-review-dock.team-embedded-manuscript .business-action-buttons :is(.business-approve-button, .business-next-step-button) { padding: 10px 14px; font-size: 12px; }
 
 @media (max-width: 1200px) {
   .content-review-dock .business-content-columns { grid-template-columns: minmax(0, 1fr); }
@@ -261,7 +273,7 @@
   .content-review-dock .business-payload-body { font-size: 13px; }
   .content-review-dock .business-inspection-content { padding: 0 15px; }
   .content-review-dock .business-publication-actions { padding: 14px; }
-  .content-review-dock .business-action-buttons > .business-approve-button { flex: 1 0 100%; }
+  .content-review-dock .business-action-buttons > :is(.business-approve-button, .business-next-step-button) { flex: 1 1 auto; }
   .content-review-dock .business-reconcile-form { flex-direction: column; }
   .content-review-dock .business-revision-form,
   .content-review-dock .business-reconcile-panel { padding: 16px; }

@@ -6,7 +6,8 @@ import type { BusinessSnapshot, BusinessWorkItem, Member } from '../types';
 import type { ProjectHomeProps } from './ProjectHome';
 import { BusinessBadge, BusinessNotice } from './BusinessComponents';
 import { businessTime, contentRevision, contentState, publicationGroup, workState } from './businessState';
-import { actionBody, currentWorkReceipt, projectContentTitle, projectMessages, workIsClosed, workNeedsAttention, workRoleName } from './projectWorkspaceState';
+import { actionBody, currentWorkReceipt, projectContentTitle, projectMessages, workIsClosed, workRoleName } from './projectWorkspaceState';
+import { projectWorkIssue } from './projectDailyStatus';
 import { useBusinessBusy } from './useBusinessBusy';
 
 export default function ProjectConversation(props: ProjectHomeProps) {
@@ -25,7 +26,7 @@ export default function ProjectConversation(props: ProjectHomeProps) {
   const work = state.workItems.filter(item => item.projectId === project.id);
   const content = state.contentItems.filter(item => item.projectId === project.id);
   const openWork = work.filter(item => !workIsClosed(item));
-  const blocked = openWork.filter(item => workNeedsAttention(item));
+  const blocked = openWork.filter(item => projectWorkIssue(item));
   const awaiting = content.filter(item => publicationGroup(state, item) === 'awaiting');
   const verifying = content.filter(item => ['unknown', 'sending'].includes(publicationGroup(state, item)));
   const entries = [
@@ -50,7 +51,7 @@ export default function ProjectConversation(props: ProjectHomeProps) {
     followsLatest.current = false;
     node.focus({ preventScroll: true });
     node.scrollIntoView({ block: 'center', behavior: 'instant' });
-  }, [focusId, focusNonce]);
+  }, [focusId, focusNonce, covered]);
   const pause = async () => {
     if (pauseLock.current) return;
     pauseLock.current = true; report('pause', true); setError('');
@@ -61,17 +62,17 @@ export default function ProjectConversation(props: ProjectHomeProps) {
   return <section className="team-conversation" aria-label={`${project.name}的负责人会话`} data-project-id={project.id} inert={covered}>
     <header className="team-conversation-header">
       <span className="team-channel-mark" aria-hidden="true"><Radio size={18} /></span><div className="team-project-heading"><h2>负责人通讯</h2><p>{owner?.name || '负责人'}<span className="team-heading-divider">·</span>协调团队与接续工作</p></div>
-      <div className="team-header-tools"><button className="btn btn-secondary btn-icon-only" disabled={busy || project.status === 'archived'} aria-label={project.status === 'paused' ? '继续项目' : '暂停项目'} title={project.status === 'paused' ? '继续项目' : '暂停项目'} onClick={() => void pause()}>{project.status === 'paused' ? <Play size={15} /> : <Pause size={15} />}</button>
-        <button className="btn btn-secondary btn-icon-only" aria-label="项目运行与账号设置" title="项目运行与账号设置" onClick={onSettings}><Settings2 size={15} /></button></div>
+      <div className="team-header-tools"><button className={`btn btn-secondary ${project.status === 'paused' ? 'team-resume-project' : 'btn-icon-only'}`} disabled={busy || project.status === 'archived'} aria-label={project.status === 'paused' ? '继续项目' : '暂停项目'} title={project.status === 'paused' ? '继续项目' : '暂停项目'} onClick={() => void pause()}>{project.status === 'paused' ? <><Play size={15} /><span>继续项目</span></> : <Pause size={15} />}</button>
+        <button className="btn btn-secondary btn-icon-only" aria-label="项目运行与账号设置" title="项目运行与账号设置" onClick={() => onSettings('runtime')}><Settings2 size={15} /></button></div>
     </header>
     <div className="team-context-row"><p>对话与交接记录</p>
       <button type="button" onClick={() => onShowPanel?.('resources')}><FolderOpen size={13} />资料</button><button type="button" onClick={() => onShowPanel?.('recap')}>复盘</button></div>
     {error && <BusinessNotice tone="danger">{error}</BusinessNotice>}
     {(project.waitReason || project.blockers?.length || bootstrap.workspace.paused) && <div className="team-project-condition" role="status">{bootstrap.workspace.paused ? '工作区调度已暂停，恢复后继续推进。' : project.waitReason || project.blockers?.join('；')}</div>}
     {(awaiting.length > 0 || verifying.length > 0 || blocked.length > 0) && <section className="team-attention" aria-label="待批准与交接受阻" aria-live="polite">
-      {awaiting.length > 0 && <button className="team-approval-prompt" disabled={busy} onClick={() => onOpenContent(awaiting[0].id)}><span className="team-attention-icon"><ShieldCheck size={16} /></span><span><strong>{awaiting.length} 篇整稿待你确认</strong><small>{projectContentTitle(state, awaiting[0].id)}</small></span><ArrowRight size={15} /></button>}
+      {awaiting.length > 0 && <button className="team-approval-prompt" disabled={busy} onClick={() => onOpenContent(awaiting[0].id)}><span className="team-attention-icon"><ShieldCheck size={16} /></span><span><strong>{awaiting.length} 篇整稿可以审阅</strong><small>{projectContentTitle(state, awaiting[0].id)}</small></span><ArrowRight size={15} /></button>}
       {verifying.map(item => <button key={item.id} className="team-pending-row" disabled={busy} onClick={() => onOpenContent(item.id)}><BusinessBadge {...contentState(state, item)} /><span>{projectContentTitle(state, item.id)}</span><ArrowRight size={12} /></button>)}
-      {(showAllAttention ? blocked : blocked.slice(0, 2)).map(item => <button key={item.id} className="team-pending-row" onClick={() => props.onFocus?.(`work-${item.id}`)}><BusinessBadge {...workState(item)} /><span>{item.title || item.objective}</span><small>查看交接</small></button>)}
+      {(showAllAttention ? blocked : blocked.slice(0, 2)).map(item => <button key={item.id} className="team-pending-row" disabled={busy} onClick={() => props.onFocus?.(`work-${item.id}`)}><BusinessBadge {...projectWorkIssue(item)!} /><span>{item.title || item.objective}</span><small>查看原因</small></button>)}
       {blocked.length > 2 && <button className="team-attention-more" onClick={() => setShowAllAttention(value => !value)}>{showAllAttention ? '收起列表' : `还有 ${blocked.length - 2} 项待接续处理`}</button>}
     </section>}
     <div className="team-conversation-scroll" ref={scroller} onScroll={() => {
@@ -98,7 +99,7 @@ export default function ProjectConversation(props: ProjectHomeProps) {
     </div>
     {hasNewActivity && <button className="team-new-activity" onClick={jumpToLatest}><ArrowDown size={13} />有新进展，回到最新</button>}
     <ProjectComposer {...props} onBusy={reportMessage} onSent={jumpToLatest} />
-    <div className="team-conversation-footnote"><span>{openWork.length} 项未完工作</span><span>成员说明与程序证据分别记录</span></div>
+    <div className="team-conversation-footnote"><span>{openWork.length} 项未完工作</span><span>草稿按项目自动保存</span></div>
   </section>;
 }
 
@@ -107,9 +108,10 @@ function WorkPhase({ work, state, members, timeZone, focused, focusNonce, onOpen
   onOpenContent: (id: string, versionId?: string) => void; disabled: boolean;
 }) {
   const [override, setOverride] = useState<boolean | null>(null);
-  const expanded = override ?? (focused || workNeedsAttention(work) || ['running', 'waiting_tool'].includes(work.status));
+  const expanded = override ?? focused;
   useEffect(() => { if (focused) setOverride(true); }, [focused, focusNonce]);
-  const status = workState(work);
+  const issue = projectWorkIssue(work);
+  const status = issue || workState(work);
   const memberName = (id?: string | null) => members.find(member => member.id === id)?.name || (id === 'user' ? '你' : id === 'service' ? '本机服务' : '待登记');
   const events = state.workHandoffs.filter(event => event.projectId === work.projectId && event.workItemId === work.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const receipt = currentWorkReceipt(work, state.workReceipts);
@@ -119,7 +121,7 @@ function WorkPhase({ work, state, members, timeZone, focused, focusNonce, onOpen
   const checkNames: Record<string, string> = { input_integrity: '工作输入与约定版本一致', declared_files: '约定文件已逐项收取', required_sections: '交付说明包含约定内容' };
   return <article className={`team-work-phase ${status.tone} ${focused ? 'is-focused' : ''}`} data-project-focus={`work-${work.id}`} tabIndex={-1}>
     <button className="team-phase-toggle" aria-expanded={expanded} onClick={() => setOverride(!expanded)}><span className="team-phase-glyph"><GitBranch size={16} /></span><span className="team-phase-copy"><small>{workRoleName(work)} · {memberName(work.memberId)}</small><strong>{work.title || work.objective}</strong></span><BusinessBadge {...status} /><ChevronDown size={16} className={expanded ? 'is-open' : ''} /></button>
-    {workNeedsAttention(work) && <p className="team-phase-warning">{work.waitReason || work.error || (work.dueAt && Date.parse(work.dueAt) < Date.now() ? '已超过预计交付时间，仍保留在未完工作中。' : '这项交接仍需负责人接续处理。')}</p>}
+    {issue && <p className="team-phase-warning">{work.waitReason || work.error || issue.detail || `${issue.label}，展开查看当前记录。`}</p>}
     {expanded && <div className="team-phase-body">
       <p className="team-phase-objective">{work.objective}</p>
       <dl className="team-handoff-people"><div><dt>负责</dt><dd>{memberName(work.memberId)}</dd></div><ArrowRight size={12} aria-hidden="true" /><div><dt>收取</dt><dd>{memberName(work.receiverId)}</dd></div><ArrowRight size={12} aria-hidden="true" /><div><dt>核对</dt><dd>{memberName(work.checkerId)}</dd></div></dl>
@@ -158,9 +160,12 @@ function ProjectComposer({ project, bootstrap, onRefresh, onBusy, onSent }: Proj
   };
   const frozen = busy || !draft.loaded || Boolean(draft.values.requestId);
   const owner = bootstrap.members.find(member => member.id === project.ownerId);
+  const recipient = draft.values.recipientId ? bootstrap.members.find(member => member.id === draft.values.recipientId) : owner;
   return <form className="team-project-composer" onSubmit={event => { event.preventDefault(); void send(); }}>
     <textarea className="form-textarea" rows={2} aria-label="告诉负责人新的要求" placeholder="告诉负责人新的要求，团队会继续推进……" maxLength={12000} disabled={frozen} value={draft.values.body || ''} onChange={event => draft.setField('body', event.target.value)} />
-    <div className="team-composer-footer"><select className="form-select" aria-label="消息收件人" disabled={frozen} value={draft.values.recipientId || ''} onChange={event => draft.setField('recipientId', event.target.value)}><option value="">{owner?.name || '负责人'} · 协调团队</option>{bootstrap.members.filter(member => project.memberIds.includes(member.id) && member.id !== project.ownerId).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select><button className="btn btn-primary" type="submit" disabled={busy || !draft.loaded || !draft.values.body?.trim()}><Send size={13} />{busy ? '正在发送' : draft.values.requestId ? '核对并重试' : '发送'}</button></div>
+    <div className="team-composer-footer"><div className="team-recipient-control"><span className="team-current-recipient">发给 <strong>{recipient?.name || (draft.values.recipientId ? '原指定成员' : '负责人')}</strong>{draft.values.recipientId ? ' · 指定成员' : ' · 负责人'}</span>
+      <details className="team-recipient-options"><summary>调整收件人</summary><label><span>消息收件人</span><select className="form-select" aria-label="消息收件人" disabled={frozen} value={draft.values.recipientId || ''} onChange={event => draft.setField('recipientId', event.target.value)}><option value="">{owner?.name || '负责人'} · 协调团队</option>{bootstrap.members.filter(member => project.memberIds.includes(member.id) && member.id !== project.ownerId).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label></details></div>
+      <button className="btn btn-primary" type="submit" disabled={busy || !draft.loaded || !draft.values.body?.trim()}><Send size={13} />{busy ? '正在发送' : draft.values.requestId ? '核对并重试' : '发送'}</button></div>
     {(error || draft.error) && <BusinessNotice tone="danger">{error || draft.error}</BusinessNotice>}{notice && <p className="team-composer-notice" role="status">{notice}</p>}
   </form>;
 }

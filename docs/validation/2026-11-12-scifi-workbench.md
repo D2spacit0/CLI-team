@@ -1,5 +1,7 @@
 # 2026-11-12 科幻工作台改版验证
 
+本文保留当天首版科幻界面的验证记录。后续统一入口、默认会话、配置往返和更新后的桌面包见[使用流程简化记录](2026-11-12-simpler-workflow.md)。
+
 CLI Team 已改为深蓝与冰青色的中文指挥工作台。顶部展示项目目标和可定位的真实交接阶段，左侧保留项目索引，中间是负责人通讯，右侧是固定整稿审阅。待发布页改为处理队列，旧任务、团队讨论、成员和设置页面沿用相同主题。
 
 这次界面改版连同[业务协作升级](2026-11-12-team-upgrade.md)一起交付。协作流程参考 [solo-to-team-skills](https://github.com/dabingfy-dot/solo-to-team-skills)，项目会话与成果布局参考 [LibreChat](https://github.com/LibreChat-AI/LibreChat)。界面没有增加模拟运行指标，也没有改变独立验收或最终发布条件。

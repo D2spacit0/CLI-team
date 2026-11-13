@@ -9,6 +9,7 @@
 .team-header-tools { display: flex; flex-shrink: 0; gap: 4px; }
 .team-header-tools .btn { width: 42px; height: 44px; min-height: 44px; background: transparent; color: var(--wb-muted); border-color: transparent; }
 .team-header-tools .btn:hover { border-color: var(--wb-border); color: var(--wb-accent); }
+.team-header-tools .btn.team-resume-project { width: auto; gap: 6px; padding-inline: 9px; color: var(--wb-accent); font-size: 11px; }
 .team-context-row { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 0 17px; min-height: 44px; border-top: 1px solid var(--wb-border-subtle); border-bottom: 1px solid var(--wb-border-subtle); }
 .team-context-row p { margin: 0; min-width: 0; flex: 1; font-size: 11px; letter-spacing: .04em; color: var(--wb-muted); }
 .team-context-row button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; min-height: 44px; padding: 5px 3px; border: 0; background: transparent; color: var(--wb-text-secondary); font-size: 12px; cursor: pointer; white-space: nowrap; }
@@ -110,7 +111,15 @@
 .team-project-composer .form-textarea:focus-visible { outline: none; }
 .team-project-composer .form-textarea::placeholder { color: var(--wb-muted); opacity: 1; }
 .team-composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 7px; }
-.team-composer-footer .form-select { width: auto; max-width: calc(100% - 88px); min-height: 44px; border-color: transparent; background-color: transparent; padding: 8px 23px 8px 0; font-size: 11px; color: var(--wb-text-secondary); }
+.team-recipient-control { min-width: 0; flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 2px 12px; }
+.team-current-recipient { min-width: 0; color: var(--wb-muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.team-current-recipient strong { font-weight: 500; color: var(--wb-text-secondary); }
+.team-recipient-options { min-width: 0; color: var(--wb-muted); font-size: 11px; }
+.team-recipient-options > summary { min-height: 40px; padding: 11px 0; cursor: pointer; }
+.team-recipient-options[open] { flex-basis: 100%; }
+.team-recipient-options > label { display: flex; gap: 10px; align-items: center; padding-bottom: 6px; }
+.team-recipient-options > label > span { flex-shrink: 0; }
+.team-composer-footer .form-select { min-width: 0; width: auto; max-width: 100%; min-height: 44px; background-color: var(--wb-surface-subtle); padding: 8px 25px 8px 9px; font-size: 11px; color: var(--wb-text-secondary); }
 .team-composer-footer .btn { min-width: 78px; min-height: 44px; padding: 9px 13px; font-size: 12px; }
 .team-project-composer .business-notice { margin-top: 10px; padding: 9px; font-size: 11px; }
 .team-composer-notice { font-size: 11px; line-height: 1.7; color: var(--wb-muted); margin: 9px 0 0; }

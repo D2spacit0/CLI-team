@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseHash, routeHash } from '../ui/workbench/navigation/useWorkbenchRoute.ts';
 import { contentGateSummary, contentState, emptyBusinessState, metricDisplay, metricValues, publicationGroup,
-  revisionChanges, safeSourceUrl, unresolvedSubmission, workState } from '../ui/projects/businessState.ts';
+  publicationAttemptForDisplay, revisionChanges, safeSourceUrl, unresolvedSubmission, workState } from '../ui/projects/businessState.ts';
+import { contentNextStep } from '../ui/content/contentNextStep.ts';
+import { accountConnectionStep, projectAccountBound, publicationAccountReady, resolveSettingsProject } from '../ui/projects/businessSettingsState.ts';
 import { createTaskDraftStore } from '../ui/taskDrafts.ts';
 import { currentWorkReceipt, projectMessages, searchProject, workIsClosed, workNeedsAttention } from '../ui/projects/projectWorkspaceState.ts';
 
@@ -10,9 +12,11 @@ const item = { id: 'content-1', projectId: 'project-1', title: '下雨天徒步�
 const revision = { id: 'version-1', contentId: item.id, projectId: item.projectId, revision: 1, parentId: null,
   title: item.title, body: '先查天气，再确认路线。', tags: ['户外准备'], images: [{ sha256: 'one' }, { sha256: 'two' }],
   manifestHash: 'manifest-1', authorMemberIds: ['writer'], inputRefs: [], visibility: 'public', createdAt: item.createdAt };
-const eligibility = { id: item.id, versionId: revision.id, revision: 1, status: 'eligible', checkIds: ['check-1'], reviewIds: ['review-1'] };
-const check = { id: 'check-1', contentId: item.id, versionId: revision.id, manifestHash: revision.manifestHash, passed: true, status: 'passed' };
-const review = { id: 'review-1', contentId: item.id, versionId: revision.id, manifestHash: revision.manifestHash, memberId: 'reviewer', verdict: 'approve', status: 'current' };
+const eligibility = { id: item.id, versionId: revision.id, revision: 1, status: 'eligible', valid: true, checkIds: ['check-1'], reviewIds: ['review-1'] };
+const check = { id: 'check-1', contentId: item.id, versionId: revision.id, manifestHash: revision.manifestHash, evidenceType: 'machine', passed: true, status: 'passed' };
+const review = { id: 'review-1', contentId: item.id, versionId: revision.id, manifestHash: revision.manifestHash, memberId: 'reviewer', verdict: 'approve', status: 'current', evidenceType: 'agent_review', sourceRunId: 'review-run-1' };
+const project = { id: item.projectId, name: '项目 A', reviewerId: review.memberId, status: 'active', account: null };
+const reviewedState = () => ({ ...emptyBusinessState(), projects: [project], contentItems: [item], contentRevisions: [revision], contentEligibilities: [eligibility], contentChecks: [check], reviews: [review] });
 
 test('project and content links survive reload without altering existing task deep links', () => {
   assert.equal(parseHash('', '').view, 'projects');
@@ -31,9 +35,8 @@ test('project and content links survive reload without altering existing task de
 });
 
 test('a possible submission remains in reconciliation even after login blocking or stale approval', () => {
-  const state = emptyBusinessState();
-  state.contentItems = [item]; state.contentEligibilities = [eligibility];
-  state.approvals = [{ id: 'approval-1', contentId: item.id, versionId: revision.id, status: 'approved', createdAt: item.createdAt }];
+  const state = reviewedState();
+  state.approvals = [{ id: 'approval-1', contentId: item.id, versionId: revision.id, approvalDigest: 'approved-version-1', status: 'approved', createdAt: item.createdAt }];
   assert.equal(publicationGroup(state, item), 'queued');
   for (const status of ['blocked', 'cancelled', 'failed', 'login_required', 'unknown', 'verifying']) {
     state.attempts = [{ id: 'attempt-1', contentId: item.id, versionId: revision.id, status, submissionMayHaveOccurred: true, createdAt: item.createdAt }];
@@ -71,6 +74,129 @@ test('machine checks, independent review and invalidated eligibility remain sepa
   assert.equal(stale.review.label, '审稿已失效');
   assert.equal(contentGateSummary(revision, { ...eligibility, reviewIds: ['missing'] }, [check], [review]).reviewPassed, false);
   assert.equal(contentGateSummary(revision, { ...eligibility, reviewIds: ['old', review.id], reviewId: review.id }, [check], [{ ...review, id: 'old', verdict: 'changes_requested' }, review]).reviewPassed, true);
+});
+
+test('review labels and expired approvals cannot make incomplete manuscript evidence ready for confirmation', () => {
+  for (const status of ['review', 'ready', 'expired', 'revoked', 'awaiting_approval']) {
+    const state = reviewedState();
+    const content = { ...item, status };
+    state.reviews = [];
+    assert.equal(publicationGroup(state, content), 'preparing', status);
+    assert.equal(contentState(state, content).label, '等待独立审稿', status);
+    state.contentChecks = [];
+    assert.equal(contentState(state, content).label, '等待程序检查', status);
+  }
+  const state = reviewedState();
+  assert.equal(publicationGroup(state, item), 'awaiting');
+  assert.equal(contentState(state, item).label, '等待你确认整稿');
+  for (const change of [{ valid: false }, { status: 'pending' }, { versionId: 'old-version' }, { contentId: 'another-content' }, { checkIds: [check.id, 'missing-check'] }, { reviewId: 'unlisted-review' }]) {
+    state.contentEligibilities = [{ ...eligibility, ...change }];
+    assert.equal(publicationGroup(state, item), 'preparing', JSON.stringify(change));
+  }
+});
+
+test('confirmation requires exact machine evidence and the current independent reviewer identity', () => {
+  for (const change of [{ status: 'unverified' }, { sourceRunId: null }, { memberId: 'writer' }, { memberId: 'other-reviewer' }, { contentId: 'other-content' }, { manifestHash: 'old-hash' }, { invalidatedAt: item.createdAt }, { evidenceType: 'agent_claim' }]) {
+    const state = reviewedState();
+    state.reviews = [{ ...review, ...change }];
+    assert.equal(publicationGroup(state, item), 'preparing', JSON.stringify(change));
+  }
+  for (const change of [{ status: 'failed' }, { passed: false }, { evidenceType: 'agent_claim' }, { contentId: 'other-content' }, { manifestHash: 'old-hash' }, { invalidatedAt: item.createdAt }]) {
+    const state = reviewedState();
+    state.contentChecks = [{ ...check, ...change }];
+    assert.equal(publicationGroup(state, item), 'preparing', JSON.stringify(change));
+  }
+  for (const change of [{ reviewerId: null }, { status: 'archived' }]) {
+    const state = reviewedState(); state.projects = [{ ...project, ...change }];
+    assert.equal(publicationGroup(state, item), 'preparing');
+  }
+});
+
+test('an unresolved platform submission takes priority over a later failed request and invalidated review', () => {
+  const state = reviewedState();
+  const unknown = { id: 'old-attempt', contentId: item.id, versionId: revision.id, status: 'unknown', createdAt: item.createdAt };
+  const failed = { ...unknown, id: 'later-attempt', status: 'failed', submissionMayHaveOccurred: false, createdAt: '2026-11-11T02:00:00.000Z' };
+  state.contentEligibilities = [{ ...eligibility, status: 'invalid', valid: false }];
+  state.attempts = [unknown, failed];
+  assert.equal(publicationGroup(state, item), 'unknown');
+  assert.equal(contentState(state, item).label, '结果待核实');
+  state.attempts = [{ ...unknown, status: 'sending' }, failed];
+  assert.equal(publicationGroup(state, item), 'sending');
+  const resolved = { ...unknown, status: 'published', updatedAt: failed.createdAt };
+  assert.equal(publicationAttemptForDisplay([resolved, unknown, failed], item.id)?.status, 'published');
+});
+
+test('the next manuscript action cannot substitute local readiness for publication approval', () => {
+  const ready = { canApprove: true, submitting: false, uncertain: false, published: false, stale: false, loading: false, previewError: false,
+    workspacePaused: false, projectStatus: 'active', accountReady: true, hasReviewer: true, imagesReady: true, hasDesktopApproval: true,
+    approvalQueued: false, gates: contentGateSummary(revision, eligibility, [check], [review], project.reviewerId) };
+  assert.equal(contentNextStep(ready).action, 'approve');
+  assert.notEqual(contentNextStep({ ...ready, canApprove: false }).action, 'approve');
+  for (const [change, expected] of [
+    [{ uncertain: true, accountReady: false, workspacePaused: true }, 'reconcile'],
+    [{ submitting: true, uncertain: true }, 'refresh'], [{ published: true }, 'conversation'],
+    [{ stale: true }, 'latest'], [{ previewError: true }, 'refresh'], [{ loading: true }, 'refresh'],
+    [{ workspacePaused: true }, 'runtime'], [{ projectStatus: 'paused' }, 'conversation'], [{ projectStatus: 'archived' }, 'conversation'],
+    [{ accountReady: false }, 'account'], [{ hasReviewer: false }, 'team'], [{ imagesReady: false }, 'refresh'],
+    [{ hasDesktopApproval: false }, 'conversation'], [{ approvalQueued: true }, 'refresh'],
+    [{ gates: { ...ready.gates, eligible: false } }, 'evidence'], [{ gates: { ...ready.gates, reviewPassed: false } }, 'evidence'],
+  ]) assert.equal(contentNextStep({ ...ready, ...change }).action, expected, JSON.stringify(change));
+});
+
+test('account settings respect an explicitly requested project and require a detected account before binding', () => {
+  const second = { ...project, id: 'project-b', name: '项目 B' };
+  assert.equal(resolveSettingsProject([project, second], second.id).project?.id, second.id);
+  assert.equal(resolveSettingsProject([project, second]).project?.id, project.id);
+  for (const [projects, requested] of [[[project, second], 'missing-project'], [[project, { ...second, status: 'archived' }], second.id]]) {
+    const resolution = resolveSettingsProject(projects, requested);
+    assert.equal(resolution.project, null);
+    assert.ok(resolution.error);
+  }
+  const connection = { status: 'ready', version: 'connector-2', account: { id: 'account-1', name: '当前账号' } };
+  const bound = { ...second, account: { ...connection.account, connectorVersion: connection.version } };
+  assert.equal(accountConnectionStep(second, { status: 'login_required' }).action, 'login');
+  assert.equal(accountConnectionStep(second, { status: 'login_required', browserOpen: true }).action, 'probe');
+  assert.equal(accountConnectionStep(second, { status: 'ready' }).action, 'probe');
+  assert.equal(accountConnectionStep(second, { ...connection, version: undefined }).action, 'probe');
+  assert.equal(accountConnectionStep(second, connection).action, 'bind');
+  assert.equal(accountConnectionStep(bound, connection).action, 'done');
+  assert.equal(accountConnectionStep(null, connection).action, 'select');
+  assert.equal(projectAccountBound(bound, { ...connection, version: 'connector-3' }), false);
+  assert.equal(projectAccountBound(bound, { ...connection, account: { id: 'other-account' } }), false);
+});
+
+test('manuscript guidance verifies the actual browser account and keeps backend approval separate', () => {
+  const account = { id: 'account-a', platform: 'xiaohongshu', connectorVersion: 'connector-2' };
+  const bound = { ...project, account };
+  const connector = { status: 'ready', version: 'connector-2', account: { id: account.id }, capabilities: { publish: true } };
+  const preview = { account: { ...account }, connector };
+  const readyInput = { canApprove: false, submitting: false, uncertain: false, published: false, stale: false, loading: false, previewError: false,
+    workspacePaused: false, projectStatus: 'active', hasReviewer: true, imagesReady: true, hasDesktopApproval: true,
+    approvalQueued: false, gates: contentGateSummary(revision, eligibility, [check], [review], project.reviewerId) };
+  assert.equal(publicationAccountReady(bound, preview), true);
+  assert.notEqual(contentNextStep({ ...readyInput, accountReady: publicationAccountReady(bound, preview) }).action, 'approve');
+  const scenarios = [
+    ['browser switched to B with the same connector version', bound, { ...preview, connector: { ...connector, account: { id: 'account-b' } } }],
+    ['preview still describes another project account', bound, { ...preview, account: { ...account, id: 'account-b' } }],
+    ['preview uses an old account binding', bound, { ...preview, account: { ...account, connectorVersion: 'connector-1' } }],
+    ['project has no bound account', { ...bound, account: null }, preview],
+    ['preview has no project account', bound, { ...preview, account: null }],
+    ['browser has no detected account', bound, { ...preview, connector: { ...connector, account: null } }],
+    ['browser account identity is missing', bound, { ...preview, connector: { ...connector, account: {} } }],
+    ['connector version is missing', bound, { ...preview, connector: { ...connector, version: undefined } }],
+    ['connector version changed', bound, { ...preview, connector: { ...connector, version: 'connector-3' } }],
+    ['connection requires login', bound, { ...preview, connector: { ...connector, status: 'login_required' } }],
+    ['connection is unavailable', bound, { ...preview, connector: { ...connector, status: 'unavailable' } }],
+    ['publish capability is unavailable', bound, { ...preview, connector: { ...connector, capabilities: { publish: false } } }],
+    ['publish capability is missing', bound, { ...preview, connector: { ...connector, capabilities: undefined } }],
+    ['publish capability is an unverified string', bound, { ...preview, connector: { ...connector, capabilities: { publish: 'true' } } }],
+    ['preview has not loaded', bound, null],
+  ];
+  for (const [name, currentProject, currentPreview] of scenarios) {
+    const accountReady = publicationAccountReady(currentProject, currentPreview);
+    assert.equal(accountReady, false, name);
+    assert.equal(contentNextStep({ ...readyInput, accountReady }).action, 'account', name);
+  }
 });
 
 test('metric absence is never rendered as zero and source links do not execute content', () => {

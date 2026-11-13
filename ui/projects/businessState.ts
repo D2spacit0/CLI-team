@@ -38,7 +38,22 @@ export const latestAttempt = (state: BusinessSnapshot, contentId: string): Publi
   newest(state.attempts.filter((attempt) => attempt.contentId === contentId));
 
 export function unresolvedSubmission(attempt: PublicationAttempt | null | undefined): boolean {
-  return Boolean(attempt?.submissionMayHaveOccurred && attempt.status !== 'published');
+  return Boolean(attempt && attempt.status !== 'published' &&
+    (attempt.submissionMayHaveOccurred || ['sending', 'verifying', 'unknown'].includes(attempt.status)));
+}
+
+/** A later failed request cannot hide a submission whose platform result is still unknown. */
+export function publicationAttemptForDisplay(attempts: PublicationAttempt[], contentId: string): PublicationAttempt | null {
+  const records = new Map<string, PublicationAttempt>();
+  for (const attempt of attempts.filter(entry => entry.contentId === contentId)) {
+    const previous = records.get(attempt.id);
+    if (!previous || (attempt.updatedAt || attempt.createdAt) >= (previous.updatedAt || previous.createdAt)) records.set(attempt.id, attempt);
+  }
+  const related = [...records.values()];
+  return newest(related.filter(attempt => attempt.status === 'sending'))
+    || newest(related.filter(unresolvedSubmission))
+    || newest(related.filter(attempt => attempt.status === 'published'))
+    || newest(related);
 }
 
 export function itemEligibility(state: BusinessSnapshot, item: ContentItem): ContentEligibility | null {
@@ -46,40 +61,51 @@ export function itemEligibility(state: BusinessSnapshot, item: ContentItem): Con
 }
 
 export function publicationGroup(state: BusinessSnapshot, item: ContentItem): PublicationGroup {
-  const attempt = latestAttempt(state, item.id);
-  if (attempt?.status === 'published') return 'published';
+  const attempt = publicationAttemptForDisplay(state.attempts, item.id);
   if (attempt?.status === 'sending') return 'sending';
-  if (unresolvedSubmission(attempt) || ['verifying', 'unknown'].includes(attempt?.status || '')) return 'unknown';
-  const approval = newest(state.approvals.filter((entry) => entry.contentId === item.id));
-  if (approval && approval.versionId === currentContentVersion(item) && ['approved', 'queued'].includes(approval.status)
-    && itemEligibility(state, item)?.status !== 'invalid') return 'queued';
-  if (item.status === 'published') return 'published';
+  if (unresolvedSubmission(attempt)) return 'unknown';
+  if (attempt?.status === 'published' || item.status === 'published') return 'published';
+  if (['abandoned', 'cancelled', 'revising', 'changes_requested'].includes(item.status)) return 'preparing';
+  const revision = contentRevision(state, item);
   const eligibility = itemEligibility(state, item);
-  if (currentContentVersion(item) && (eligibility?.status === 'eligible'
-    || ['awaiting_approval', 'review', 'ready', 'approved', 'expired', 'revoked'].includes(item.status))) return 'awaiting';
-  return 'preparing';
+  const project = state.projects.find(entry => entry.id === item.projectId);
+  if (!revision || revision.projectId !== item.projectId || !project || project.status === 'archived') return 'preparing';
+  const gates = contentGateSummary(revision, eligibility, state.contentChecks, state.reviews, project.reviewerId);
+  if (!gates.eligible) return 'preparing';
+  const approval = newest(state.approvals.filter((entry) => entry.contentId === item.id));
+  if (approval && approval.versionId === revision.id && approval.approvalDigest &&
+      ['approved', 'queued'].includes(approval.status)) return 'queued';
+  return 'awaiting';
 }
 
 export function contentState(state: BusinessSnapshot, item: ContentItem): BusinessStateLabel {
   const group = publicationGroup(state, item);
-  const attempt = latestAttempt(state, item.id);
+  const attempt = publicationAttemptForDisplay(state.attempts, item.id);
   if (group === 'unknown') return { label: '结果待核实', tone: 'attention', detail: attempt?.verificationBlocked || attempt?.reason || '可能已提交，等待平台回读核对' };
   if (group === 'sending') return { label: '发布中', tone: 'working', detail: '已经开始提交，正在保存与核对发布证据' };
   if (group === 'published') return { label: '已核实发布', tone: 'ready' };
   if (group === 'queued') return { label: '已批准待执行', tone: 'working' };
-  if (group === 'awaiting') return { label: '待批准整稿', tone: 'attention' };
+  if (group === 'awaiting') return { label: '等待你确认整稿', tone: 'attention', detail: '本版检查与独立审稿已通过，发布账号和执行范围仍需在整稿中核对。' };
   const labels: Record<string, BusinessStateLabel> = {
     failed: { label: '制作需处理', tone: 'danger' },
     blocked: { label: '等待补充条件', tone: 'attention' },
-    revising: { label: '团队修改中', tone: 'working' },
-    changes_requested: { label: '团队修改中', tone: 'working' },
+    revising: { label: '等待团队修改', tone: 'attention' },
+    changes_requested: { label: '等待团队修改', tone: 'attention' },
     abandoned: { label: '已放弃', tone: 'neutral' },
     cancelled: { label: '已取消', tone: 'neutral' },
   };
   if (labels[item.status]) return labels[item.status];
   const eligibility = itemEligibility(state, item);
-  if (eligibility?.status === 'invalid') return { label: '待重新审查', tone: 'attention', detail: eligibility.reason };
-  return { label: currentContentVersion(item) ? '团队审查中' : '内容制作中', tone: 'working' };
+  const revision = contentRevision(state, item);
+  if (eligibility?.status === 'invalid' || eligibility && eligibility.versionId !== revision?.id) {
+    return { label: '待重新审查', tone: 'attention', detail: eligibility.reason || '账号、来源或稿件版本已变化，需要重新检查与审稿。' };
+  }
+  if (!revision) return { label: '等待形成整稿', tone: 'neutral' };
+  const project = state.projects.find(entry => entry.id === item.projectId);
+  const gates = contentGateSummary(revision, eligibility, state.contentChecks, state.reviews, project?.reviewerId ?? null);
+  if (!gates.machinePassed) return { label: gates.machineFailed ? '程序检查未通过' : '等待程序检查', tone: gates.machineFailed ? 'attention' : 'neutral', detail: eligibility?.reason };
+  if (!gates.reviewPassed) return { label: gates.reviewRejected ? '审稿要求修改' : '等待独立审稿', tone: gates.reviewRejected ? 'attention' : 'neutral', detail: eligibility?.reason };
+  return { label: '等待核对发布条件', tone: 'neutral', detail: eligibility?.reason };
 }
 
 export function workState(item: BusinessWorkItem): BusinessStateLabel {
@@ -134,21 +160,31 @@ export function revisionChanges(before: ContentRevision | null, after: ContentRe
 }
 
 export function contentGateSummary(revision: ContentRevision, eligibility: ContentEligibility | null | undefined,
-  checks: ContentCheck[], reviews: ContentReview[]) {
-  const stale = Boolean(eligibility && (eligibility.status === 'invalid' || eligibility.versionId !== revision.id));
-  const matchingChecks = checks.filter((check) => check.versionId === revision.id && check.manifestHash === revision.manifestHash && !check.invalidatedAt);
-  const selectedCheckIds = eligibility?.checkIds?.length ? eligibility.checkIds : eligibility?.checkId ? [eligibility.checkId] : [];
-  const activeChecks = selectedCheckIds.length ? matchingChecks.filter((check) => selectedCheckIds.includes(check.id)) : matchingChecks;
+  checks: ContentCheck[], reviews: ContentReview[], reviewerId?: string | null) {
+  const stale = Boolean(eligibility && (eligibility.status === 'invalid' || eligibility.versionId !== revision.id ||
+    (eligibility.contentId || eligibility.id) !== revision.contentId));
+  const matchingChecks = checks.filter((check) => check.contentId === revision.contentId && check.versionId === revision.id &&
+    check.manifestHash === revision.manifestHash && check.evidenceType === 'machine' && !check.invalidatedAt);
+  const selectedCheckIds = [...new Set(eligibility?.checkIds?.length ? eligibility.checkIds : eligibility?.checkId ? [eligibility.checkId] : [])];
+  const activeChecks = matchingChecks.filter((check) => selectedCheckIds.includes(check.id));
   const matchingReviews = reviews.filter((review) => review.versionId === revision.id && review.manifestHash === revision.manifestHash
-    && review.status === 'current' && !review.invalidatedAt && !revision.authorMemberIds.includes(review.memberId));
-  const selectedReviewIds = eligibility?.reviewId ? [eligibility.reviewId] : eligibility?.reviewIds || [];
-  const activeReviews = selectedReviewIds.length ? matchingReviews.filter((review) => selectedReviewIds.includes(review.id)) : matchingReviews;
-  const machinePassed = !stale && activeChecks.length > 0 && activeChecks.every((check) => check.passed && check.status === 'passed');
-  const reviewPassed = !stale && activeReviews.length > 0 && activeReviews.every((review) => review.verdict === 'approve');
+    && review.contentId === revision.contentId && review.evidenceType === 'agent_review' && review.status === 'current'
+    && Boolean(review.sourceRunId) && !review.invalidatedAt && !revision.authorMemberIds.includes(review.memberId)
+    && (reviewerId === undefined || review.memberId === reviewerId));
+  const selectedReviewIds = [...new Set(eligibility?.reviewId ? [eligibility.reviewId] : eligibility?.reviewIds || [])];
+  const activeReviews = matchingReviews.filter((review) => selectedReviewIds.includes(review.id));
+  const reviewSelectionMatches = !eligibility?.reviewId || Boolean(eligibility.reviewIds?.includes(eligibility.reviewId));
+  const machinePassed = !stale && Boolean(revision.manifestHash) && selectedCheckIds.length > 0 &&
+    selectedCheckIds.every(id => activeChecks.some(check => check.id === id && check.passed === true && check.status === 'passed'));
+  const reviewPassed = !stale && reviewSelectionMatches && selectedReviewIds.length > 0 &&
+    selectedReviewIds.every(id => activeReviews.some(review => review.id === id && review.verdict === 'approve'));
+  const machineFailed = !stale && activeChecks.some(check => check.passed === false || check.status === 'failed');
+  const reviewRejected = !stale && activeReviews.some(review => review.verdict === 'changes_requested');
   return {
     machine: { label: stale ? '检查已失效' : machinePassed ? '文件与字段检查通过' : activeChecks.length ? '检查未通过' : '尚未完成程序检查', tone: machinePassed ? 'ready' : stale || activeChecks.length ? 'attention' : 'neutral' } as BusinessStateLabel,
     review: { label: stale ? '审稿已失效' : reviewPassed ? '独立审稿通过' : activeReviews.length ? '有待处理的审稿意见' : '尚未完成独立审稿', tone: reviewPassed ? 'ready' : stale || activeReviews.length ? 'attention' : 'neutral' } as BusinessStateLabel,
-    machinePassed, reviewPassed,
+    machinePassed, reviewPassed, machineFailed, reviewRejected, stale,
+    eligible: eligibility?.status === 'eligible' && eligibility.valid === true && machinePassed && reviewPassed,
   };
 }
 

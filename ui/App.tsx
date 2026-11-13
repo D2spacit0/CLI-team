@@ -69,12 +69,14 @@ import { acceptanceIssue, messageAudience, parseRecipientIds, runStatusLabels, s
 import { WorkbenchNav, type WorkbenchTab } from './workbench/navigation/WorkbenchNav';
 import { AttentionView } from './workbench/attention/AttentionView';
 import { FixtureWorkbench } from './workbench/fixtures/FixtureWorkbench';
-import { useWorkbenchRoute } from './workbench/navigation/useWorkbenchRoute';
+import { businessReturnHash, parseHash, routeHash, useWorkbenchRoute } from './workbench/navigation/useWorkbenchRoute';
 import ManagedRequestDialog from './ManagedRequestDialog';
 import ManagedTeamSettings from './ManagedTeamSettings';
 import BusinessWorkspace from './projects/BusinessWorkspace';
+import type { BusinessNavigation, BusinessSettingsContext } from './projects/BusinessWorkspace';
 import BusinessSettings from './projects/BusinessSettings';
 import { useBusinessState } from './projects/useBusinessState';
+import StartWorkDialog from './StartWorkDialog';
 
 type NavTab = WorkbenchTab;
 type TaskBusySource = 'materials' | 'assignment' | 'coordination' | 'start' | 'accept' | 'revise' | 'cancel' | 'archive' | 'refresh';
@@ -113,7 +115,7 @@ export default function App() {
   // 双向路由同步
   useEffect(() => {
     if (route.view && route.view !== activeTab) {
-      setActiveModal((current) => current && ['createTask', 'createRoom', 'createMeeting', 'managedRequest'].includes(current) ? null : current);
+      setActiveModal((current) => current && ['startWork', 'createTask', 'createRoom', 'createMeeting', 'managedRequest'].includes(current) ? null : current);
       setActiveTab(route.view);
     }
   }, [route.view, activeTab]);
@@ -135,7 +137,19 @@ export default function App() {
   const [sseStatus, setSseStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
   const appLayout = useRef<HTMLDivElement>(null);
+  const runtimeSettingsSection = useRef<HTMLElement>(null);
   const [desktopLeaving, setDesktopLeaving] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'settings' || route.panel !== 'runtime') return;
+    const frame = requestAnimationFrame(() => {
+      const section = runtimeSettingsSection.current;
+      if (!section?.getClientRects().length) return;
+      section.focus({ preventScroll: true });
+      section.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab, route.panel, bootstrap?.workspace.root]);
 
   // 讨论消息发送状态
   const roomDraft = useTaskDraft(bootstrap?.workspace.root, activeRoomId && bootstrap?.rooms.some((room) => room.id === activeRoomId)
@@ -152,6 +166,7 @@ export default function App() {
   // 模态弹窗状态
   const [activeModal, setActiveModal] = useState<
     | null
+    | 'startWork'
     | 'createRoom'
     | 'createMeeting'
     | 'createTask'
@@ -240,6 +255,9 @@ export default function App() {
   const [returnToTaskCreation, setReturnToTaskCreation] = useState(false);
   const [managedRequestRoomId, setManagedRequestRoomId] = useState('team');
   const [returnToManagedRequest, setReturnToManagedRequest] = useState<string | null>(null);
+  const [workflowReturnError, setWorkflowReturnError] = useState('');
+  const [workflowReturning, setWorkflowReturning] = useState(false);
+  const workflowReturnLock = useRef(false);
   const taskCreateBusy = useRef(false);
   const [taskBusy, setTaskBusy] = useState<Record<string, TaskBusyFlags>>({});
   const taskBusyRef = useRef<Record<string, TaskBusyFlags>>({});
@@ -577,7 +595,7 @@ export default function App() {
       return;
     }
     const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href]'
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], summary'
     )).filter((element) => element.getClientRects().length > 0);
     focusable()[0]?.focus();
     const trap = (event: KeyboardEvent) => {
@@ -1092,6 +1110,56 @@ export default function App() {
   const openManagedRequest = (roomId = activeRoom?.kind === 'team' && !activeRoom.archivedAt ? activeRoom.id : 'team') => {
     setManagedRequestRoomId(roomId); setReturnToManagedRequest(null); setActiveModal('managedRequest');
   };
+  const startWork = () => {
+    if (businessBusy.current || taskCreateBusy.current) return;
+    setActiveModal('startWork');
+  };
+  const startProject = () => {
+    setActiveModal(null); setActiveTab('projects'); setMobileNavOpen(false);
+    const context = ['projects', 'publications'].includes(route.view)
+      ? { projectId: route.projectId, contentId: route.contentId, versionId: route.versionId, focusId: route.focusId } : {};
+    navigate('projects', { ...context, panel: 'create' });
+  };
+  const openBusinessSettings = ({ section = 'account', ...context }: BusinessSettingsContext) => {
+    setWorkflowReturnError(''); setActiveTab('settings'); setMobileNavOpen(false);
+    navigate('settings', { projectId: context.projectId, panel: section, returnTo: routeHash('projects', context) });
+  };
+  const openBusinessMembers = (context: BusinessNavigation) => {
+    setWorkflowReturnError(''); setActiveTab('members'); setMobileNavOpen(false);
+    navigate('members', { projectId: context.projectId, panel: 'team', returnTo: routeHash('projects', context) });
+  };
+  const businessReturn = businessReturnHash(route.returnTo);
+  const returnRoute = businessReturn ? parseHash(businessReturn, '') : null;
+  const returnProject = business.data.projects.find(project => project.id === returnRoute?.projectId);
+  const returnLabel = returnRoute?.panel === 'create' ? '返回继续创建项目' : returnRoute?.contentId && returnRoute.panel !== 'conversation' ? '返回原稿件' : '返回项目';
+  const resumeBusinessWork = async () => {
+    if (!returnRoute || workflowReturnLock.current || businessBusy.current || taskCreateBusy.current || memberSaveLock.current) return;
+    setWorkflowReturnError('');
+    if (unsavedBusiness.current || unsavedTeam.current || unsavedSettings.current) {
+      setWorkflowReturnError('请先保存或放弃尚未保存的设置，再返回原工作。'); return;
+    }
+    const fromHash = window.location.hash;
+    const fromModal = currentView.current.modal;
+    workflowReturnLock.current = true; setWorkflowReturning(true);
+    try {
+      if (!await flushAllTaskDrafts()) { setWorkflowReturnError('草稿尚未保存，请重试后返回。'); return; }
+      if (window.location.hash !== fromHash || currentView.current.modal !== fromModal) return;
+      if (unsavedBusiness.current || unsavedTeam.current || unsavedSettings.current || businessBusy.current || memberSaveLock.current) {
+        setWorkflowReturnError('请先完成当前设置，再返回原工作。'); return;
+      }
+      setActiveModal(null); setActiveTab(returnRoute.view); setMobileNavOpen(false);
+      navigate(returnRoute.view, returnRoute);
+    } finally { workflowReturnLock.current = false; setWorkflowReturning(false); }
+  };
+  const openSettingsMembers = (projectId = route.projectId) => {
+    setActiveTab('members'); setMobileNavOpen(false);
+    navigate('members', { projectId, panel: route.panel, returnTo: businessReturn });
+  };
+  const renderBusinessReturn = () => businessReturn ? <div className="workflow-return" role="status">
+    <div><strong>{returnRoute?.panel === 'create' ? '补齐成员后，继续刚才的目标' : returnProject ? `配置完成后，回到“${returnProject.name}”` : '配置完成后，回到原工作'}</strong>
+      <small>{returnRoute?.panel === 'create' ? '目标和资料要求已自动保存。' : '项目、稿件和查看的版本已保留。'}{workflowReturnError && <span role="alert"> {workflowReturnError}</span>}</small></div>
+    <button className="btn btn-primary" disabled={workflowReturning} onClick={() => void resumeBusinessWork()}>{workflowReturning ? '正在保存草稿…' : returnLabel}</button>
+  </div> : null;
   const visibleTasks = (bootstrap?.tasks || []).filter((task) => !task.archivedAt);
   const visibleRooms = (bootstrap?.rooms || []).filter((room) => !room.archivedAt);
   const visibleArtifacts = (bootstrap?.artifacts || []).filter((artifact) => visibleTasks.some((task) => task.id === artifact.taskId));
@@ -1131,7 +1199,7 @@ export default function App() {
     <>
     <div className="app-layout" ref={appLayout} inert={desktopLeaving} aria-busy={desktopLeaving || undefined}>
       {/* 顶部紧凑导航栏 */}
-      <header className="app-header">
+      <header className="app-header" inert={activeModal === 'startWork' || route.view === 'projects' && route.panel === 'create'}>
         <div className="brand-section">
           <button
             className="btn btn-icon-only btn-secondary mobile-nav-toggle"
@@ -1155,8 +1223,8 @@ export default function App() {
         </div>
 
         <div className="header-actions">
-          <button className="btn btn-sm btn-secondary header-delegate-btn" onClick={() => openManagedRequest()} disabled={!bootstrap} aria-label="交给主控" title="交给主控">
-            <Send size={13} /><span>交给主控</span>
+          <button className="btn btn-sm btn-primary header-delegate-btn" onClick={startWork} disabled={!bootstrap} aria-label="开始新工作" title="开始新工作">
+            <Plus size={13} /><span>开始新工作</span>
           </button>
           {/* SSE 状态指示器 */}
           <div className="connection-pill" role="status" aria-label={sseStatus === 'connected' ? '实时连接已连接' : sseStatus === 'connecting' ? '实时连接中' : '实时连接已断开'} title={sseStatus === 'connected' ? '实时连接已连接' : sseStatus === 'connecting' ? '实时连接中' : '实时连接已断开'}>
@@ -1196,7 +1264,7 @@ export default function App() {
       </header>
 
       {/* 主体工作台 */}
-      <div className="app-main">
+      <div className="app-main" inert={activeModal === 'startWork'}>
         {/* 一级侧边栏 */}
         <WorkbenchNav
           activeTab={activeTab}
@@ -1204,6 +1272,7 @@ export default function App() {
           bootstrap={bootstrap}
           business={business.data}
           onTabChange={handleTabChange}
+          covered={route.view === 'projects' && route.panel === 'create'}
         />
 
         {/* 主内容区域 */}
@@ -1230,8 +1299,8 @@ export default function App() {
             revision={business.revision} projectId={route.projectId} contentId={route.contentId}
             versionId={route.versionId} focusId={route.focusId} panel={route.panel}
             onNavigate={(view, selection) => { setActiveTab(view); navigate(view, selection); }}
-            onRefresh={business.refresh} onSettings={() => handleTabChange('settings')} onMembers={() => handleTabChange('members')}
-            onBusy={reportBusinessBusy} />}
+            onRefresh={business.refresh} onSettings={openBusinessSettings} onMembers={openBusinessMembers}
+            onStartWork={startWork} onBusy={reportBusinessBusy} />}
 
           <RoomWorkbench
             hidden={activeTab !== 'rooms'}
@@ -1277,8 +1346,8 @@ export default function App() {
             <div className="tasks-view">
               <div className="tasks-toolbar">
                 <h2 className="view-title">任务工作流看板</h2>
-                <button className="btn btn-primary" onClick={() => openManagedRequest()}><Send size={14} /><span>提交目标</span></button>
-                <button className="btn btn-primary" onClick={() => {
+                <details className="workflow-advanced workflow-manual-task-options"><summary>手动安排任务</summary><div>
+                <button className="btn btn-secondary" onClick={() => {
                   setTaskCreateSeed({ executionMode: 'delegated' });
                   setActiveModal('createTask');
                 }}><Users size={14} /><span>新建负责人协作任务</span></button>
@@ -1292,17 +1361,14 @@ export default function App() {
                   <Plus size={14} />
                   <span>新建单人任务</span>
                 </button>
+                </div></details>
               </div>
               {!visibleTasks.length && <div className="tasks-empty" role="status">
                 <CheckSquare size={28} />
                 <strong>还没有任务</strong>
-                <p>可以直接提交目标，让主控安排团队；也可以先选择一名成员创建单人任务。</p>
+                <p>从“开始新工作”交代目标，负责人会安排团队。需要指定执行方式时展开“手动安排任务”。</p>
                 <div>
-                  <button className="btn btn-primary" onClick={() => openManagedRequest()}>提交第一个目标</button>
-                  <button className="btn btn-secondary" onClick={() => {
-                    setTaskCreateSeed({ executionMode: 'direct', assigneeId: enabledNonControllerMembers[0]?.id || '' });
-                    setActiveModal('createTask');
-                  }}>创建单人任务</button>
+                  <button className="btn btn-primary" onClick={startWork}>开始第一项工作</button>
                 </div>
               </div>}
 
@@ -1396,7 +1462,9 @@ export default function App() {
               setActiveModal('createTask');
             }} />}
           {activeTab === 'members' && (
-            <div className="members-view">
+            <div className="members-view workflow-config-page">
+              {(businessReturn || returnToManagedRequest || returnToTaskCreation) && <div className="workflow-config-header">
+                {renderBusinessReturn()}
               {returnToManagedRequest && <div className="task-prepared-note" role="status">
                 <span>目标草稿已保存。配置好成员后，返回设置主控与协作团队。</span>
                 <button className="btn btn-secondary" onClick={() => handleTabChange('settings')}>返回配置主控团队</button>
@@ -1405,6 +1473,8 @@ export default function App() {
                 <span>任务填写草稿已保存。配置好成员后可继续准备。</span>
                 <button className="btn btn-secondary" onClick={() => { setReturnToTaskCreation(false); setActiveModal('createTask'); }}>返回继续填写任务</button>
               </div>}
+              </div>}
+              <div className="workflow-config-content">
               <div className="view-header">
                 <div>
                   <h2 className="view-title">团队与 CLI 代理</h2>
@@ -1548,6 +1618,7 @@ export default function App() {
                   );
                 })}
               </div>
+              </div>
             </div>
           )}
 
@@ -1625,11 +1696,15 @@ export default function App() {
 
           {/* 5. 设置视图 */}
           {bootstrap && (
-            <div className="settings-view" hidden={activeTab !== 'settings'} style={activeTab !== 'settings' ? { display: 'none' } : undefined}>
+            <div className="settings-view workflow-config-page" hidden={activeTab !== 'settings'} style={activeTab !== 'settings' ? { display: 'none' } : undefined}>
+              {(businessReturn || returnToManagedRequest) && <div className="workflow-config-header">
+                {renderBusinessReturn()}
               {returnToManagedRequest && <div className="task-prepared-note" role="status">
                 <span>目标草稿已保存。保存主控团队后，可返回继续填写。</span>
                 <button className="btn btn-secondary" onClick={() => openManagedRequest(returnToManagedRequest)}>返回继续填写目标</button>
               </div>}
+              </div>}
+              <div className="workflow-config-content">
               <div className="view-header">
                 <div>
                   <h2 className="view-title">工作区与系统设置</h2>
@@ -1640,15 +1715,29 @@ export default function App() {
               </div>
 
               <div className="settings-container">
-                <DesktopSettings />
                 <BusinessSettings state={business.data} bootstrap={bootstrap} onRefresh={business.refresh}
-                  onMembers={() => handleTabChange('members')} onBusy={reportBusinessBusy} onUnsaved={reportBusinessUnsaved} />
+                  initialProjectId={route.projectId} focusSection={activeTab === 'settings' ? route.panel : null}
+                  onMembers={openSettingsMembers} onBusy={reportBusinessBusy} onUnsaved={reportBusinessUnsaved} />
+                <details className="workflow-advanced" open={Boolean(returnToManagedRequest) || !bootstrap.workspace.managedTeam || undefined}><summary>新工作的默认团队</summary><div className="workflow-advanced-content">
                 {bootstrap && <ManagedTeamSettings team={bootstrap.workspace.managedTeam || null} members={bootstrap.members}
                   onSaved={(team) => {
                     bootstrapSequence.current++;
                     setBootstrap(current => current ? { ...current, workspace: { ...current.workspace, managedTeam: team } } : current);
                     void loadBootstrap();
-                  }} onMembers={() => handleTabChange('members')} onUnsaved={(value) => { unsavedTeam.current = value; }} />}
+                  }} onMembers={() => openSettingsMembers()} onUnsaved={(value) => { unsavedTeam.current = value; }} />}
+                </div></details>
+                <details className="workflow-advanced" open={route.panel === 'runtime' || undefined}><summary>桌面与运行设置</summary><div className="workflow-advanced-content">
+                <section ref={runtimeSettingsSection} className="settings-group" tabIndex={-1} aria-label="工作区调度">
+                  <h2 className="settings-label">工作区调度</h2>
+                  <p className="text-muted">{bootstrap.workspace.paused
+                    ? '当前暂停新派工。恢复后，本工作区所有有效项目和排队任务都可继续调度。'
+                    : '当前允许新派工。暂停后不再安排新的工作，已有运行仍需等待结束。'}</p>
+                  <button className={`btn ${bootstrap.workspace.paused ? 'btn-primary' : 'btn-secondary'}`} disabled={pausePending} onClick={handleToggleGlobalPause}>
+                    {bootstrap.workspace.paused ? <Play size={14} /> : <Pause size={14} />}
+                    {pausePending ? '正在更新调度状态…' : bootstrap.workspace.paused ? '恢复工作区调度' : '暂停工作区新派工'}
+                  </button>
+                </section>
+                <DesktopSettings />
                 {/* 事实状态信息展示 */}
                 <div className="settings-group">
                   <div className="settings-label">工作区基本事实</div>
@@ -1677,11 +1766,15 @@ export default function App() {
                 <RuntimeSettingsForm settings={bootstrap.workspace}
                   onUnsaved={(value) => { unsavedSettings.current = value; }}
                   onSaved={(updated) => setBootstrap((current) => current ? { ...current, workspace: { ...current.workspace, ...updated } } : current)} />
+                </div></details>
+              </div>
               </div>
             </div>
           )}
         </main>
       </div>
+
+      {activeModal === 'startWork' && <StartWorkDialog onClose={() => setActiveModal(null)} onTask={() => openManagedRequest()} onProject={startProject} />}
 
       {(activeModal === 'createRoom' || activeModal === 'createMeeting') && bootstrap && <DiscussionDialog
         kind={activeModal === 'createMeeting' ? 'meeting' : 'room'} workspace={bootstrap.workspace.root}

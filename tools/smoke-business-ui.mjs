@@ -10,7 +10,7 @@ import { normalizePublicationPayload } from '../server/connectors/xiaohongshu.mj
 import { childEnvironment, killChild } from '../server/safety.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
-const outputBase = path.join(projectRoot, 'work', 'scifi-ui-proof');
+const outputBase = path.join(projectRoot, 'work', 'workflow-simplification-20261112', 'ui-proof');
 fs.mkdirSync(outputBase, { recursive: true });
 const output = fs.mkdtempSync(path.join(outputBase, 'run-'));
 const workspace = path.join(output, 'workspace');
@@ -184,6 +184,86 @@ const saveDraft = async (input, value) => {
     input.fill(value),
   ]);
 };
+const startWork = async kind => {
+  await page.locator('.header-actions').getByRole('button', { name: '开始新工作', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '开始新工作', exact: true });
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: kind === 'project' ? /持续运营内容/ : /完成一次任务/ }).click();
+};
+const openInspection = async () => {
+  const disclosure = page.locator('details').filter({ has: page.locator('summary', { hasText: '检查、审稿与版本记录' }) }).first();
+  await disclosure.waitFor();
+  if (!await disclosure.evaluate(element => element.open)) await disclosure.locator(':scope > summary').click();
+};
+const assertApprovalUnavailable = async message => {
+  assert.equal(await page.locator('.business-approve-button:enabled').count(), 0, message);
+};
+const inspectRestoredFocus = async name => {
+  await page.waitForFunction(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || active === document.body || !active.isConnected ||
+        active.closest('[inert],[hidden],[aria-hidden="true"]') || active.matches(':disabled')) return false;
+    const rect = active.getBoundingClientRect();
+    return getComputedStyle(active).visibility !== 'hidden' && rect.width > 0 && rect.height > 0 &&
+      rect.top < innerHeight && rect.bottom > 0 && rect.left < innerWidth && rect.right > 0;
+  });
+  const focus = await page.evaluate(() => {
+    const active = document.activeElement;
+    return { label: active.getAttribute('aria-label') || active.textContent.trim().slice(0, 120), tag: active.tagName,
+      connected: active.isConnected, inert: Boolean(active.closest('[inert]')), isBody: active === document.body,
+      rect: active.getBoundingClientRect().toJSON() };
+  });
+  result.focusRestoration ||= [];
+  result.focusRestoration.push({ name, ...focus });
+  return focus;
+};
+const inspectReturnControl = async (name, label) => {
+  const button = page.getByRole('button', { name: label, exact: true });
+  await button.waitFor(); await settlePaint();
+  const measurement = await button.evaluate(element => {
+    const rect = element.getBoundingClientRect(), xInset = Math.min(8, rect.width / 4), yInset = Math.min(8, rect.height / 4);
+    const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    const points = [center, { x: rect.left + xInset, y: rect.top + yInset },
+      { x: rect.right - xInset, y: rect.top + yInset }, { x: rect.left + xInset, y: rect.bottom - yInset },
+      { x: rect.right - xInset, y: rect.bottom - yInset }];
+    const scroller = element.closest('.settings-view,.members-view')?.querySelector('.workflow-config-content');
+    return { viewport: { width: innerWidth, height: innerHeight }, rect: rect.toJSON(), center,
+      fullyWithinViewport: rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+      disabled: element.disabled, inert: Boolean(element.closest('[inert]')),
+      hitTests: points.map(point => ({ ...point, reachesButton: element.contains(document.elementFromPoint(point.x, point.y)) })),
+      scroll: scroller ? { top: scroller.scrollTop, maximum: scroller.scrollHeight - scroller.clientHeight } : null };
+  });
+  result.returnControls ||= [];
+  result.returnControls.push({ name, label, ...measurement });
+  assert.equal(measurement.fullyWithinViewport, true, `${name}: the complete return button must stay within the viewport`);
+  assert.equal(measurement.disabled, false, `${name}: the return button must be enabled`);
+  assert.equal(measurement.inert, false, `${name}: the return button must accept input`);
+  assert.ok(measurement.hitTests.every(point => point.reachesButton), `${name}: the return button must not be clipped or covered`);
+  return measurement;
+};
+const inspectReturnAfterScroll = async (name, label, viewSelector) => {
+  const selector = `${viewSelector} .workflow-config-content`;
+  await page.locator(selector).evaluate(element => element.scrollTo({ top: element.scrollHeight, behavior: 'instant' }));
+  await page.waitForFunction(selector => {
+    const element = document.querySelector(selector);
+    return element && element.scrollHeight - element.clientHeight - element.scrollTop <= 1;
+  }, selector);
+  const measurement = await inspectReturnControl(name, label);
+  assert.ok(measurement.scroll && measurement.scroll.maximum - measurement.scroll.top <= 1,
+    `${name}: the page content must actually reach its scroll end before inspecting the return control`);
+  return measurement;
+};
+const createProjectFromForm = async () => {
+  const [response] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/api/projects') && response.request().method() === 'POST'),
+    page.getByRole('button', { name: '建立项目并开始', exact: true }).click(),
+  ]);
+  const created = await response.json();
+  assert.ok(response.ok(), JSON.stringify(created));
+  await page.getByRole('dialog', { name: '持续运营内容', exact: true }).waitFor({ state: 'detached' });
+  await page.locator(`.team-conversation[data-project-id="${created.id}"]`).waitFor();
+  return created;
+};
 try {
   assert.ok(fs.existsSync(path.join(projectRoot, 'dist', 'index.html')), 'Run npm run build before smoke:business-ui.');
   const index = fs.readFileSync(path.join(projectRoot, 'dist', 'index.html'), 'utf8');
@@ -199,8 +279,10 @@ try {
   const service = runtime.service;
   service.updateSettings({ paused: true });
   const owner = service.saveMember({ name: '演练负责人', handle: 'rehearsal-owner', provider: 'custom', role: 'builder', executable: process.execPath, enabled: true, permission: 'edit' });
-  const reviewer = service.saveMember({ name: '演练审稿员', handle: 'rehearsal-reviewer', provider: 'custom', role: 'reviewer', executable: process.execPath, enabled: true, permission: 'plan' });
-  const researcher = service.saveMember({ name: '演练研究员', handle: 'rehearsal-researcher', provider: 'custom', role: 'researcher', executable: process.execPath, enabled: true, permission: 'edit' });
+  const reviewer = service.saveMember({ name: '演练审稿员', handle: 'rehearsal-reviewer', provider: 'custom', role: 'reviewer', executable: process.execPath, enabled: false, permission: 'plan' });
+  const researcher = service.saveMember({ name: '演练研究员', handle: 'rehearsal-researcher', provider: 'custom', role: 'researcher', executable: process.execPath, enabled: false, permission: 'edit' });
+  const unrelated = service.saveMember({ name: '演练其他项目成员', handle: 'rehearsal-unrelated', provider: 'custom', role: 'builder', executable: process.execPath, enabled: false, permission: 'edit' });
+  const unavailableWorker = service.saveMember({ name: '演练已停用成员', handle: 'rehearsal-unavailable', provider: 'custom', role: 'researcher', executable: process.execPath, enabled: false, permission: 'edit' });
   context = await chromium.launchPersistentContext(path.join(output, 'browser-profile'), { executablePath: browserExecutable,
     chromiumSandbox: true, headless: true, env: scopedEnvironment(), viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
   browser = context.browser(); assert.ok(browser);
@@ -226,26 +308,182 @@ try {
   page.on('request', request => {
     const pathname = new URL(request.url()).pathname;
     if (readOnlyNavigation && !['GET', 'HEAD', 'OPTIONS'].includes(request.method()) &&
-      /^\/api\/(?:settings|members|discover|business\/connection)/.test(pathname)) {
+      /^\/api\/(?:settings|members|discover|business\/connection|projects)/.test(pathname)) {
       result.configurationWrites.push({ path: pathname, method: request.method() });
     }
   });
   await page.goto(runtime.url);
-  await check('real project creation into the new single-page workbench', async () => {
-    await page.getByRole('button', { name: '建立第一个项目', exact: true }).click();
-    await page.getByLabel('项目名称', { exact: true }).fill('界面演练 · 工作方法');
-    await page.getByLabel('希望团队持续做什么', { exact: true }).fill('演练数据：为刚开始管理个人工作的人制作实用方法图文，保留来源与实际使用限制。');
-    await page.getByLabel('已有资料与内容要求', { exact: false }).fill('界面演练数据，不进行真实成员运行或发布。使用具体、自然的中文，标明模板制作。');
-    await page.screenshot({ path: path.join(output, 'create-project.png') });
-    await page.getByRole('button', { name: '建立项目并开始', exact: true }).click();
-    await page.locator('.team-conversation').waitFor();
-    assert.equal(service.projects.list().length, 1);
+  await check('one start entry separates a one-off task from ongoing content work without losing task drafts', async () => {
+    const mainEntry = page.locator('.header-actions').getByRole('button', { name: '开始新工作', exact: true });
+    await mainEntry.waitFor();
+    assert.equal(await mainEntry.count(), 1, 'the header has one primary work entry');
+    await mainEntry.click();
+    const chooser = page.getByRole('dialog', { name: '开始新工作', exact: true });
+    await chooser.waitFor();
+    await page.screenshot({ path: path.join(output, 'start-work-1440.png') });
+    for (const key of ['Tab', 'Tab', 'Tab', 'Shift+Tab']) {
+      await page.keyboard.press(key);
+      assert.equal(await chooser.evaluate(element => element.contains(document.activeElement)), true,
+        'new work keyboard focus must remain in its dialog');
+    }
+    await chooser.getByRole('button', { name: /完成一次任务/ }).click();
+    const request = page.getByTestId('managed-request');
+    await request.waitFor();
+    assert.equal(await request.getByRole('button', { name: '开始这项任务', exact: true }).isDisabled(), true,
+      'choosing a work type does not bypass missing team setup');
+    const text = '流程演练：完成一项带明确验收标准的任务。';
+    await saveDraft(request.locator('#managed-objective'), text);
+    await request.getByRole('button', { name: '稍后继续', exact: true }).click();
+    await startWork('task');
+    await page.waitForFunction(expected => document.querySelector('#managed-objective')?.value === expected, text);
+    assert.equal(await request.locator('#managed-objective').inputValue(), text);
+    await request.getByRole('button', { name: '稍后继续', exact: true }).click();
+    assert.equal(service.store.list('tasks').length, 0, 'saving a goal draft must not start a task');
   });
-  const project = service.projects.list()[0];
+  await check('project setup detour returns to the exact saved goal after a real member configuration change and reload', async () => {
+    await startWork('project');
+    await saveDraft(page.getByLabel('项目名称', { exact: true }), '首用演练 A · 保留创建草稿');
+    await saveDraft(page.locator('.business-create-dialog').getByLabel(/^希望团队持续做什么/), '演练目标：按实际工作节奏形成中文图文，先补齐独立审稿成员。');
+    await saveDraft(page.getByLabel('已有资料与内容要求', { exact: false }), '首用演练草稿：成员配置回来后不能丢失这些要求。');
+    assert.equal(await page.getByRole('button', { name: '建立项目并开始', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: '稍后继续', exact: true }).click();
+    await page.getByRole('dialog', { name: '持续运营内容', exact: true }).waitFor({ state: 'detached' });
+    const deferredFocus = await inspectRestoredFocus('deferring project creation restores its primary entry');
+    assert.equal(deferredFocus.label, '开始新工作');
+    await startWork('project');
+    await page.waitForFunction(() => document.querySelector('.business-create-dialog input')?.value === '首用演练 A · 保留创建草稿');
+    await page.getByRole('button', { name: '去配置成员', exact: true }).click();
+    await page.locator('.members-view').waitFor();
+    await settlePaint();
+    assert.equal(await page.locator('.header-actions [aria-label="开始新工作"]').evaluate(element => element === document.activeElement), false,
+      'leaving creation for member settings must not restore focus to the old header entry');
+    const route = new URLSearchParams(page.url().split('?').at(-1));
+    assert.ok(page.url().includes('#/members'));
+    assert.match(route.get('return') || '', /^#\/projects(?:\?|\/)/);
+    const card = page.locator('.member-card').filter({ has: page.locator('.member-name', { hasText: '演练审稿员' }) });
+    const [response] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith(`/api/members/${reviewer.id}`) && response.request().method() === 'PATCH'),
+      card.getByRole('button', { name: '启用', exact: true }).click(),
+    ]);
+    assert.ok(response.ok());
+    assert.equal(service.store.get('members', reviewer.id).enabled, true);
+    await page.reload();
+    await page.locator('.members-view').waitFor();
+    await card.waitFor();
+    await inspectReturnControl('member-setup-after-reload-1440', '返回继续创建项目');
+    let memberReturn;
+    for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(size);
+      memberReturn = await inspectReturnAfterScroll(`member-setup-at-scroll-end-${size.width}`, '返回继续创建项目', '.members-view');
+      if (size.width === 390) assert.ok(memberReturn.scroll.top > 0, 'the narrow member page must exercise actual scrolling');
+      await page.screenshot({ path: path.join(output, `members-return-${size.width}.png`) });
+    }
+    await page.mouse.click(memberReturn.center.x, memberReturn.center.y);
+    await page.getByLabel('项目名称', { exact: true }).waitFor();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.waitForFunction(() => document.querySelector('.business-create-dialog input')?.value === '首用演练 A · 保留创建草稿');
+    await page.locator('.business-create-dialog button[type="submit"]:enabled').waitFor();
+    assert.equal(await page.getByLabel('项目名称', { exact: true }).inputValue(), '首用演练 A · 保留创建草稿');
+    assert.match(await page.locator('.business-create-dialog').getByLabel(/^希望团队持续做什么/).inputValue(), /先补齐独立审稿成员/);
+    assert.match(await page.getByLabel('已有资料与内容要求', { exact: false }).inputValue(), /不能丢失/);
+    assert.equal(await page.getByRole('button', { name: '建立项目并开始', exact: true }).isDisabled(), false,
+      'an originally empty reviewer choice must be filled from the newly configured reviewer');
+    await page.screenshot({ path: path.join(output, 'create-after-members-1440.png') });
+    await createProjectFromForm();
+    assert.equal(service.projects.list().length, 1);
+    assert.equal(await page.locator('.team-inspector').count(), 0, 'a new project starts with its conversation unobstructed');
+  });
+  const firstProject = service.projects.list()[0];
+  service.saveMember({ enabled: true }, researcher.id);
+  service.saveMember({ enabled: true }, unrelated.id);
+  service.saveMember({ enabled: true }, unavailableWorker.id);
+  service.updateSettings({ managedTeam: { ownerId: owner.id, workerIds: [researcher.id, unavailableWorker.id], reviewerId: reviewer.id,
+    verification: null, autoDeliver: true } });
+  service.saveMember({ enabled: false }, unavailableWorker.id);
+  await check('real project creation into the new single-page workbench', async () => {
+    await page.reload();
+    await page.locator('.team-conversation').waitFor();
+    await startWork('project');
+    await page.getByLabel('项目名称', { exact: true }).fill('界面演练 · 工作方法');
+    await page.locator('.business-create-dialog').getByLabel(/^希望团队持续做什么/).fill('演练数据：为刚开始管理个人工作的人制作实用方法图文，保留来源与实际使用限制。');
+    await page.getByLabel('已有资料与内容要求', { exact: false }).fill('界面演练数据，不进行真实成员运行或发布。使用具体、自然的中文，标明模板制作。');
+    assert.equal(await page.getByRole('button', { name: '建立项目并开始', exact: true }).isDisabled(), true,
+      'an unavailable member inherited from the default team must require an explicit decision');
+    await page.locator('.business-create-dialog summary').filter({ hasText: '调整项目成员' }).click();
+    const unavailableChoice = page.getByRole('checkbox', { name: /演练已停用成员/ });
+    assert.equal(await unavailableChoice.isChecked(), true, 'the unavailable default worker remains visible until explicitly removed');
+    assert.equal(await unavailableChoice.isDisabled(), false, 'an unavailable optional worker must be removable');
+    await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/api/ui-drafts') && response.request().method() === 'PUT' && response.ok() &&
+        response.request().postDataJSON().scope.kind === 'new-project' &&
+        !JSON.parse(response.request().postDataJSON().values.memberIds).includes(unavailableWorker.id)),
+      unavailableChoice.click(),
+    ]);
+    await unavailableChoice.waitFor({ state: 'detached' });
+    const teamDraft = service.store.list('uiDrafts').find(entry => entry.scope.kind === 'new-project' && !entry.deleted);
+    assert.ok(teamDraft);
+    assert.equal(JSON.parse(teamDraft.values.memberIds).includes(unavailableWorker.id), false);
+    await page.locator('.business-create-dialog button[type="submit"]:enabled').waitFor();
+    await page.locator('.business-create-dialog summary').filter({ hasText: '调整项目成员' }).click();
+    await page.screenshot({ path: path.join(output, 'create-project.png') });
+    await createProjectFromForm();
+    assert.equal(service.projects.list().length, 2);
+    assert.equal(await page.locator('.team-inspector').count(), 0);
+  });
+  const project = service.projects.list().find(entry => entry.id !== firstProject.id);
+  assert.ok(project);
+  assert.deepEqual([...project.memberIds].sort(), [owner.id, reviewer.id, researcher.id].sort(),
+    'new projects inherit the selected default roster, not every enabled member');
+  assert.equal(project.memberIds.includes(unrelated.id), false);
+  assert.equal(project.memberIds.includes(unavailableWorker.id), false);
+  result.defaultTeam = { memberIds: project.memberIds, unrelatedMemberId: unrelated.id,
+    unavailableWorkerId: unavailableWorker.id, unavailableMemberRetainedUntilExplicitRemoval: true };
   const composer = page.getByLabel('告诉负责人新的要求', { exact: true });
   const draftText = '演练草稿：请补充怎样接住临时任务的具体例子。';
+  await check('the daily view starts with one truthful next step and expands the actual team process on demand', async () => {
+    const disclosure = page.locator('.team-process-details');
+    assert.equal(await disclosure.evaluate(element => element.open), false);
+    assert.equal(await page.locator('.team-stage-track').isVisible(), false);
+    await page.locator('.team-next-step').getByText(/暂停/).first().waitFor();
+    assert.equal(await page.locator('.team-next-step').getByText(/正在执行|团队正在改稿/).count(), 0,
+      'paused scheduling cannot be reported as work in progress');
+    const phases = page.locator('.team-phase-toggle');
+    for (const phase of await phases.all()) assert.equal(await phase.getAttribute('aria-expanded'), 'false');
+    await page.screenshot({ path: path.join(output, 'daily-project-1440.png') });
+    await disclosure.locator(':scope > summary').click();
+    assert.equal(await page.locator('.team-stage-track').isVisible(), true);
+    await disclosure.locator(':scope > summary').click();
+    assert.equal(await page.locator('.team-stage-track').isVisible(), false);
+    const layout = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth,
+      inspector: document.querySelectorAll('.team-inspector').length, conversation: document.querySelector('.team-conversation').getBoundingClientRect().toJSON() }));
+    assert.equal(layout.inspector, 0); assert.ok(layout.documentWidth <= layout.width);
+    result.dailyView = layout;
+    const settingsBefore = structuredClone(service.settings());
+    readOnlyNavigation = true;
+    await page.locator('.team-next-step').getByRole('button', { name: '查看运行设置', exact: true }).click();
+    const runtimeSection = page.getByRole('region', { name: '工作区调度', exact: true });
+    await runtimeSection.waitFor();
+    const runtimeFocus = await inspectRestoredFocus('paused work links to the explicit workspace scheduling control');
+    assert.equal(runtimeFocus.label, '工作区调度');
+    const runtimeParams = new URLSearchParams(page.url().split('?').at(-1));
+    assert.equal(runtimeParams.get('panel'), 'runtime');
+    assert.equal(runtimeParams.get('project'), project.id);
+    assert.equal(await runtimeSection.getByRole('button', { name: '恢复工作区调度', exact: true }).isDisabled(), false);
+    assert.deepEqual(service.settings(), settingsBefore, 'viewing runtime settings must not resume scheduling');
+    assert.deepEqual(result.configurationWrites, []);
+    await inspectReturnControl('runtime-settings-after-auto-position-1440', '返回项目');
+    const runtimeReturn = await inspectReturnAfterScroll('runtime-settings-at-scroll-end-1440', '返回项目', '.settings-view:not([hidden])');
+    assert.ok(runtimeReturn.scroll.top > 0, 'runtime settings must exercise actual scrolling');
+    await page.mouse.click(runtimeReturn.center.x, runtimeReturn.center.y);
+    await page.locator(`.team-conversation[data-project-id="${project.id}"]`).waitFor();
+    assert.equal(service.settings().paused, true);
+    readOnlyNavigation = false;
+  });
   await check('messages default to the owner and create an actual user conversation thread', async () => {
+    assert.equal(await page.getByLabel('消息收件人', { exact: true }).isVisible(), false);
+    await page.locator('summary').filter({ hasText: '调整收件人' }).click();
     assert.equal(await page.getByLabel('消息收件人', { exact: true }).inputValue(), '');
+    await page.locator('summary').filter({ hasText: '调整收件人' }).click();
     await composer.fill('演练交代：写清楚这些方法的适用边界。');
     await page.locator('.team-project-composer').getByRole('button', { name: '发送', exact: true }).click();
     await page.locator('.team-message.from-user').getByText('演练交代：写清楚这些方法的适用边界。', { exact: true }).waitFor();
@@ -284,8 +522,21 @@ try {
     tags: ['工作方法', '个人管理'], images: one.images.map(image => ({ assetId: image.id })), sources: one.sources,
     inputRefs: one.inputRefs, authorMemberIds: [owner.id], changeSummary: '演练版本改动：加入适用边界，避免泛化承诺。' });
   const review = service.contentRevisions.recordReview(item.id, two.id, { memberId: reviewer.id, verdict: 'approve', summary: '界面演练审稿状态：文案已说明适用边界，图文一致。此条由验收脚本种入，不是真实成员审稿。' });
-  service.store.update('reviews', review.id, { status: 'current' });
-  service.store.update('contentEligibilities', item.id, { status: 'eligible', reason: '', reviewId: review.id, reviewIds: [review.id] });
+  await check('a draft without a verified independent review is never advertised as ready for user approval', async () => {
+    service.store.update('contentItems', item.id, { status: 'review' });
+    service.emitChange('business.ui_fixture', { projectId: project.id });
+    await page.locator('.team-history-row').filter({ hasText: two.title }).click();
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('.business-image-button img').length === 2 &&
+      [...document.querySelectorAll('.business-image-button img')].every(image => image.complete && image.naturalWidth === 1080));
+    assert.equal(await page.locator('.team-approval-prompt').count(), 0);
+    await page.locator('.business-content-breadcrumb').getByText('等待独立审稿', { exact: true }).waitFor();
+    assert.equal(await page.locator('.business-content-breadcrumb').getByText(/待批准整稿|可以确认发布|等待你确认整稿/).count(), 0);
+    await assertApprovalUnavailable('a current draft without source-verified review cannot expose a publish action');
+    await page.screenshot({ path: path.join(output, 'waiting-for-review-1440.png') });
+  });
+  service.store.update('reviews', review.id, { status: 'current', sourceRunId: 'ui-fixture-review-run', evidenceType: 'agent_review' });
+  service.store.update('contentEligibilities', item.id, { status: 'eligible', valid: true, reason: '', reviewId: review.id, reviewIds: [review.id] });
   service.store.update('contentItems', item.id, { status: 'awaiting_approval', currentReviewVersionId: two.id });
   const stamp = new Date().toISOString();
   const seedWork = service.business.createWork({ projectId: project.id, contentId: item.id, memberId: owner.id, kind: 'copy',
@@ -310,16 +561,24 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('.business-image-button img').length === 2 && [...document.querySelectorAll('.business-image-button img')].every(image => image.complete && image.naturalWidth === 1080));
     assert.equal(await composer.inputValue(), draftText);
     assert.equal(await page.locator('.business-image-strip figcaption').filter({ hasText: '模板制作' }).count(), 2);
-    assert.equal(await page.getByRole('button', { name: '批准本版发布', exact: true }).isDisabled(), true);
+    await assertApprovalUnavailable('browser-only rehearsal cannot approve a publication');
+    await openInspection();
     await page.getByRole('tab', { name: '版本改动', exact: true }).click();
     await page.getByText('演练版本改动：加入适用边界，避免泛化承诺。', { exact: true }).waitFor();
+    await page.locator('button[aria-label="刷新整稿状态"]:enabled').waitFor();
+    await page.getByLabel('查看稿件版本', { exact: true }).selectOption(two.id);
+    await settlePaint();
+    assert.equal(await page.getByRole('button', { name: '刷新整稿状态', exact: true }).isDisabled(), false,
+      'selecting the current version must not clear its preview or leave it loading forever');
+    assert.equal(await page.locator('.business-image-button img').count(), 2);
+    assert.equal(await page.locator('.content-authorization-summary').getByText('正在核对本版发布条件', { exact: true }).count(), 0);
     await page.getByLabel('查看稿件版本', { exact: true }).selectOption(one.id);
     await page.getByRole('button', { name: '查看最新整稿', exact: true }).waitFor();
     assert.ok(page.url().includes(`version=${one.id}`));
-    assert.equal(await page.getByRole('button', { name: '批准本版发布', exact: true }).isDisabled(), true);
+    await assertApprovalUnavailable('an older version cannot expose a publish action');
     await page.getByRole('button', { name: '查看最新整稿', exact: true }).click();
     await page.getByRole('tab', { name: '检查与审稿', exact: true }).click();
-    await page.getByText('独立审稿通过', { exact: true }).waitFor();
+    await page.locator('[data-evidence="agent"]').getByText('独立审稿通过', { exact: true }).waitFor();
     await page.getByRole('tab', { name: '协作与材料', exact: true }).click();
     await page.locator('.business-collaboration-list').getByText('演练成员贡献：通过真实结构化行动字段展示。', { exact: true }).waitFor();
     await page.locator('.business-collaboration-list').getByText('演练负责人', { exact: true }).waitFor();
@@ -363,6 +622,152 @@ try {
       .evaluate(element => element === document.activeElement);
     assert.equal(overlay.rootInertAfterClose, false, 'closing the preview must restore application interaction');
     assert.equal(overlay.focusReturnedToOpener, true, 'closing the preview must return focus to its opener');
+  });
+  await check('account setup preserves the second project and the exact manuscript through reload and return', async () => {
+    const beforeProjects = structuredClone(service.projects.list());
+    const beforeSettings = structuredClone(service.settings());
+    readOnlyNavigation = true;
+    const racingDraftText = `${draftText} 返回等待期间的独立草稿。`;
+    const interceptedDraft = Promise.withResolvers(), releaseDraft = Promise.withResolvers();
+    let heldDraft = false, heldAt = 0;
+    const holdDraft = async route => {
+      const request = route.request();
+      if (request.method() === 'PUT' && !heldDraft && request.postDataJSON()?.scope?.kind === 'project-message' &&
+          request.postDataJSON()?.scope?.projectId === project.id && request.postDataJSON()?.values?.body === racingDraftText) {
+        heldDraft = true; heldAt = Date.now(); interceptedDraft.resolve();
+        await releaseDraft.promise;
+      }
+      await route.fallback();
+    };
+    await page.route('**/api/ui-drafts', holdDraft);
+    try {
+      await Promise.all([
+        page.waitForRequest(request => request.url().endsWith('/api/ui-drafts') && request.method() === 'PUT' &&
+          request.postDataJSON()?.scope?.projectId === project.id && request.postDataJSON()?.values?.body === racingDraftText),
+        composer.fill(racingDraftText),
+      ]);
+      await interceptedDraft.promise;
+      await page.getByRole('button', { name: '接入发布账号', exact: true }).click();
+      await page.locator('[data-business-settings-section="team"]').getByRole('button', { name: '配置成员能力', exact: true }).click();
+      await page.locator('.members-view').waitFor();
+      await page.getByRole('button', { name: '返回原稿件', exact: true }).click();
+      await page.getByRole('button', { name: '正在保存草稿…', exact: true }).waitFor();
+      await page.locator('.members-view').getByRole('button', { name: '添加代理成员', exact: true }).click();
+      const memberDialog = page.getByRole('dialog', { name: '添加代理成员', exact: true });
+      const memberName = '流程演练：返回等待期间的未保存成员';
+      await memberDialog.getByPlaceholder('例如: 代码构建员', { exact: true }).fill(memberName);
+      const savedResponse = page.waitForResponse(response => response.url().endsWith('/api/ui-drafts') &&
+        response.request().method() === 'PUT' && response.request().postDataJSON()?.values?.body === racingDraftText);
+      const heldDurationMs = Date.now() - heldAt;
+      releaseDraft.resolve();
+      assert.ok((await savedResponse).ok(), 'the delayed draft must finish saving successfully');
+      await page.locator('.members-view .workflow-return button:enabled').waitFor();
+      await settlePaint();
+      assert.ok(page.url().includes('#/members'), 'a completed return request must not navigate away from a newer member editor');
+      assert.equal(await memberDialog.isVisible(), true, 'a completed return request must not close the newer member editor');
+      assert.equal(await memberDialog.getByPlaceholder('例如: 代码构建员', { exact: true }).inputValue(), memberName);
+      await page.screenshot({ path: path.join(output, 'return-preserves-member-editor-1440.png') });
+      await memberDialog.getByRole('button', { name: '关闭成员配置', exact: true }).click();
+      await page.getByRole('alertdialog', { name: '放弃未保存的成员配置？', exact: true }).getByRole('button', { name: '放弃修改', exact: true }).click();
+      await memberDialog.waitFor({ state: 'detached' });
+      const memberReturn = await inspectReturnControl('member-editor-dismissed-1440', '返回原稿件');
+      await page.mouse.click(memberReturn.center.x, memberReturn.center.y);
+      await page.waitForFunction(expected => document.querySelector('[aria-label="告诉负责人新的要求"]')?.value === expected, racingDraftText);
+      assert.equal(service.store.list('members').some(member => member.name === memberName), false, 'this race check must not create a member');
+      result.returnWhileSaving = { heldDurationMs, draftSaved: true, remainedOnMembers: true, memberEditorPreserved: true,
+        editorExplicitlyDiscarded: true, memberCreated: false, originalManuscriptRestored: true };
+      await saveDraft(composer, draftText);
+    } finally {
+      releaseDraft.resolve();
+      await page.unroute('**/api/ui-drafts', holdDraft);
+    }
+    await page.getByRole('button', { name: '接入发布账号', exact: true }).click();
+    await page.locator('.settings-view:not([hidden])').waitFor();
+    const params = new URLSearchParams(page.url().split('?').at(-1));
+    assert.equal(params.get('project'), project.id);
+    const returnParams = new URLSearchParams((params.get('return') || '').split('?').at(-1));
+    assert.match(params.get('return') || '', new RegExp(project.id));
+    assert.equal(returnParams.get('content'), item.id);
+    assert.equal(returnParams.get('version'), two.id);
+    assert.equal(await page.getByLabel('接入账号的项目', { exact: true }).inputValue(), project.id,
+      'the account settings must not silently switch from project B to project A');
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-business-settings-section') === 'account');
+    await inspectReturnControl('account-settings-after-auto-position-1440', '返回原稿件');
+    await page.reload();
+    await page.getByLabel('接入账号的项目', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('接入账号的项目', { exact: true }).inputValue(), project.id);
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-business-settings-section') === 'account');
+    await inspectReturnControl('account-settings-after-reload-1440', '返回原稿件');
+    await page.screenshot({ path: path.join(output, 'account-context-1440.png') });
+    const teamEditor = page.locator('[data-business-settings-section="team"]');
+    const researcherChoice = teamEditor.getByRole('checkbox', { name: '演练研究员', exact: true });
+    await researcherChoice.uncheck();
+    await page.locator('select[aria-label="接入账号的项目"]:disabled').waitFor();
+    assert.equal(await teamEditor.getByRole('button', { name: '配置成员能力', exact: true }).isDisabled(), true,
+      'leaving for member configuration must be unavailable while this project has unsaved team edits');
+    // This lifecycle state is seeded only to verify editor retention; no project is actually archived through the UI.
+    const projectBeforeArchive = service.store.get('projects', project.id);
+    service.store.update('projects', project.id, { status: 'archived' });
+    service.emitChange('business.ui_fixture', { projectId: project.id });
+    await teamEditor.getByText('这个项目已不能继续配置。你的未保存编辑仍保留供核对，可以明确撤销；当前不能提交。', { exact: true }).waitFor();
+    assert.equal(await researcherChoice.isChecked(), false, 'an incoming archive must preserve unsaved team values');
+    assert.equal(await researcherChoice.isDisabled(), true);
+    assert.equal(await teamEditor.getByRole('button', { name: '保存项目设置', exact: true }).isDisabled(), true);
+    service.store.put('projects', projectBeforeArchive);
+    service.emitChange('business.ui_fixture', { projectId: project.id });
+    await teamEditor.getByText('这个项目已不能继续配置。你的未保存编辑仍保留供核对，可以明确撤销；当前不能提交。', { exact: true }).waitFor({ state: 'detached' });
+    await teamEditor.getByRole('button', { name: '撤销未保存修改', exact: true }).click();
+    await page.locator('select[aria-label="接入账号的项目"]:enabled').waitFor();
+    assert.equal(await researcherChoice.isChecked(), true);
+    result.settingsEditor = { projectId: project.id, dirtyNavigationPrevented: true,
+      fixtureArchivePreservedDirtyValues: true, fixtureArchiveReverted: true, noTeamWriteSubmitted: true };
+    const settingsUrl = page.url(), missingProject = 'ui-missing-project';
+    const missingParams = new URLSearchParams(settingsUrl.split('?').at(-1));
+    missingParams.set('project', missingProject);
+    await page.goto(`${runtime.url}/#/settings?${missingParams.toString()}`);
+    await page.getByText('指定的项目不存在。请选择要配置的项目。', { exact: true }).waitFor();
+    assert.equal(await page.getByLabel('接入账号的项目', { exact: true }).inputValue(), missingProject,
+      'a missing project must not silently fall back to a different existing project');
+    assert.equal(await page.locator('[data-business-settings-section="team"]').count(), 0);
+    assert.equal(await page.getByRole('button', { name: '绑定当前账号到项目', exact: true }).count(), 0);
+    await page.goto(settingsUrl);
+    await page.waitForFunction(expected => document.querySelector('[aria-label="接入账号的项目"]')?.value === expected, project.id);
+    await page.waitForFunction(() => document.activeElement?.getAttribute('data-business-settings-section') === 'account');
+    let accountReturn;
+    for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(size);
+      accountReturn = await inspectReturnAfterScroll(`account-settings-at-scroll-end-${size.width}`, '返回原稿件', '.settings-view:not([hidden])');
+      assert.ok(accountReturn.scroll.top > 0, 'account settings must exercise actual scrolling');
+      await inspectVisuals(`account-return-${size.width}`, ['.settings-view:not([hidden])', '.workflow-return']);
+      await page.screenshot({ path: path.join(output, `account-return-${size.width}.png`) });
+    }
+    await page.mouse.click(accountReturn.center.x, accountReturn.center.y);
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.waitForFunction(expected => document.querySelector('[aria-label="查看稿件版本"]')?.value === expected, two.id);
+    assert.equal(await composer.inputValue(), draftText);
+    await startWork('project');
+    await page.getByRole('dialog', { name: '持续运营内容', exact: true }).waitFor();
+    await page.locator('.business-create-dialog input:not(:disabled)').first().waitFor();
+    await page.getByRole('button', { name: '稍后继续', exact: true }).click();
+    await page.getByRole('dialog', { name: '持续运营内容', exact: true }).waitFor({ state: 'detached' });
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    assert.equal(await page.getByLabel('查看稿件版本', { exact: true }).inputValue(), two.id,
+      'deferring a new project from a manuscript must preserve the original manuscript and selected version');
+    assert.deepEqual(service.projects.list(), beforeProjects, 'opening settings must not change project account bindings');
+    assert.deepEqual(service.settings(), beforeSettings, 'opening account setup must not restore all workspace scheduling');
+    assert.deepEqual(result.configurationWrites, []);
+    result.settingsRoundTrip = { projectId: project.id, differentProjectId: firstProject.id, contentId: item.id, versionId: two.id,
+      reloadPreservedContext: true, missingProjectRejected: true, configurationWrites: 0 };
+    readOnlyNavigation = false;
+    await page.getByRole('button', { name: '收起稿件面板', exact: true }).click();
+    assert.equal(await page.locator('.team-inspector').count(), 0);
+    await inspectRestoredFocus('closing the desktop manuscript restores a visible connected control');
+    assert.equal(await page.locator('.team-process-details').evaluate(element => element.open), false);
+    await inspectVisuals('daily-workbench-1440', ['.team-workbench', '.team-sidebar', '.team-conversation'], { primaryRequired: true });
+    await page.screenshot({ path: path.join(output, 'daily-workbench-1440.png') });
+    await page.getByRole('button', { name: '查看整稿', exact: true }).click();
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
   });
   await check('project search locates exact messages, handoff details and historical versions', async () => {
     const search = page.getByLabel('搜索当前项目', { exact: true });
@@ -433,6 +838,7 @@ try {
         await composer.waitFor();
         overlay.conversationInertAfterClose = await page.locator('.team-conversation').evaluate(element => element.inert);
         assert.equal(overlay.conversationInertAfterClose, false);
+        overlay.restoredFocus = await inspectRestoredFocus('closing the mobile manuscript restores visible focus before any follow-up click');
         await composer.click();
         overlay.composerReceivesFocusAfterClose = await composer.evaluate(element => element === document.activeElement);
         assert.equal(overlay.composerReceivesFocusAfterClose, true, 'closing the mobile manuscript must restore conversation interaction');
@@ -492,9 +898,39 @@ try {
     await page.screenshot({ path: path.join(output, 'publication-unknown.png') });
     await row.click();
     await page.getByText('这篇稿件可能已经提交，结果待核实。', { exact: true }).waitFor();
-    assert.equal(await page.getByRole('button', { name: '批准本版发布', exact: true }).isDisabled(), true);
+    await assertApprovalUnavailable('an uncertain submission cannot expose a publish action');
     assert.equal(await page.getByRole('button', { name: /重新发布|重发|重试发布/ }).count(), 0);
     await page.getByRole('button', { name: '回读核实', exact: true }).waitFor();
+  });
+  await check('changing publication scope selects the returned version and retains review and approval gates', async () => {
+    const scheduledItem = service.contentRevisions.createItem(project.id, { title: '流程演练：调整排期后直接看新版本' });
+    const scheduledVersion = service.contentRevisions.createRevision(scheduledItem.id, {
+      title: scheduledItem.title, body: '本条仅验证排期修改后的版本定位，不运行成员，也不进行发布。', tags: ['流程演练'],
+      images: two.images.map(image => ({ assetId: image.id })), sources: two.sources, inputRefs: two.inputRefs, authorMemberIds: [owner.id],
+    });
+    service.emitChange('business.ui_fixture', { projectId: project.id });
+    await page.goto(`${runtime.url}/#/projects/${project.id}?content=${scheduledItem.id}&version=${scheduledVersion.id}`);
+    await page.locator(`[data-content-workbench="${scheduledItem.id}"]`).waitFor();
+    await page.getByRole('button', { name: '调整发布时间与范围', exact: true }).click();
+    const visibility = page.locator('.business-schedule-form').getByLabel(/^可见范围/);
+    await visibility.waitFor();
+    result.scheduleVisibilityLabel = await visibility.evaluate(select => [...select.labels].map(label => label.textContent));
+    await visibility.selectOption('private');
+    const [response] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith(`/api/content/${scheduledItem.id}/schedule`) && response.request().method() === 'PUT'),
+      page.getByRole('button', { name: '保存为新的发布版本', exact: true }).click(),
+    ]);
+    assert.ok(response.ok(), JSON.stringify(await response.json()));
+    const next = await response.json();
+    assert.notEqual(next.id, scheduledVersion.id);
+    assert.equal(next.visibility, 'private');
+    await page.waitForFunction(expected => document.querySelector('[aria-label="查看稿件版本"]')?.value === expected, next.id);
+    assert.equal(new URLSearchParams(page.url().split('?').at(-1)).get('version'), next.id);
+    await assertApprovalUnavailable('scope updates still require checks, review and native approval');
+    assert.equal(service.store.list('publicationApprovals').some(approval => approval.contentId === scheduledItem.id), false);
+    result.scheduleRoundTrip = { contentId: scheduledItem.id, previousVersion: scheduledVersion.id, currentVersion: next.id,
+      selectedReturnedVersion: true, createdApproval: false };
+    await page.screenshot({ path: path.join(output, 'schedule-new-version-1440.png') });
   });
   await check('existing room and task deep links still open', async () => {
     const task = service.createTask({ title: '演练旧任务访问验证', objective: '只验证旧任务深链接', assigneeId: owner.id, reviewerId: reviewer.id,
@@ -544,7 +980,7 @@ try {
   assert.equal(service.settings().paused, true);
   assert.deepEqual(service.store.list('publicationApprovals').map(entry => entry.id), ['ui-approval']);
   assert.deepEqual(service.store.list('publicationAttempts').map(entry => entry.id), ['ui-publication-attempt']);
-  assert.equal(result.checks.length, 10, 'the original ten interaction scenarios must all finish');
+  assert.equal(result.checks.length, 16, 'all ten existing interactions and six simplified-flow checks must finish');
   result.buildUnchanged = result.build.every(entry => sha256(fs.readFileSync(path.join(projectRoot, entry.path))) === entry.sha256);
   assert.equal(result.buildUnchanged, true, 'the compiled UI changed during verification');
   result.isolation = { workspaceRoot: service.root, executorCalls, runCount: service.store.list('runs').length,
@@ -554,6 +990,12 @@ try {
   result.ok = false; result.error = error.stack; console.error(error.stack);
   result.lastUrl = page?.url();
   result.notices = await page?.locator('.business-notice').allTextContents().catch(() => []);
+  result.formDiagnostics = await page?.locator('.business-create-dialog').evaluateAll(dialogs => dialogs.map(dialog => ({
+    labels: [...dialog.querySelectorAll('label')].map(label => label.outerHTML),
+    inputs: [...dialog.querySelectorAll('input,textarea,select')].map(input => ({ tag: input.tagName, value: input.value,
+      ariaLabel: input.getAttribute('aria-label'), ariaLabelledby: input.getAttribute('aria-labelledby'),
+      disabled: input.disabled, labels: [...(input.labels || [])].map(label => label.textContent) })),
+  }))).catch(() => []);
   await page?.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {});
   process.exitCode = 1;
 } finally {
