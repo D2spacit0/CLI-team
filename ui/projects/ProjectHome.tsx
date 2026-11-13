@@ -14,7 +14,7 @@ export interface ProjectHomeProps {
   onRefresh: () => Promise<void>; onOpenContent: (id: string, versionId?: string) => void;
   onSettings: (section?: ProjectSettingsSection) => void; onBusy: (busy: boolean) => void;
   onShowPanel?: (panel: ProjectPanel) => void; onFocus?: (id: string) => void;
-  focusId?: string | null; focusNonce?: number; selectedContentId?: string | null; covered?: boolean;
+  focusId?: string | null; focusNonce?: number; selectedContentId?: string | null; covered?: boolean; inspectorOpen?: boolean;
 }
 
 export function ProjectResources({ project, bootstrap, state, onRefresh, onBusy }: ProjectHomeProps) {

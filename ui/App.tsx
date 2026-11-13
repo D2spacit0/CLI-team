@@ -1239,7 +1239,7 @@ export default function App() {
           </div>
 
           {/* 活跃作业计数 */}
-          {bootstrap && (
+          {bootstrap && !['projects', 'publications'].includes(activeTab) && (
             <div className="runs-count-pill" title="当前活跃执行作业数">
               <Cpu size={13} />
               <span>运行中 <strong>{bootstrap.workspace.activeRuns}</strong></span>
@@ -1247,7 +1247,7 @@ export default function App() {
           )}
 
           {/* 全局暂停/恢复按钮 */}
-          {bootstrap && (
+          {bootstrap && !['projects', 'publications'].includes(activeTab) && (
             <button
               className={`btn btn-sm ${
                 bootstrap.workspace.paused ? 'btn-warning' : 'btn-secondary'

@@ -1,105 +1,138 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowRight, ChevronDown, FileText, FolderOpen, GitBranch, Pause, Play, Radio, Send, Settings2, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowRight, ChevronDown, FileText, GitBranch, Send, ShieldCheck } from 'lucide-react';
 import { api } from '../api';
 import { useTaskDraft } from '../taskDrafts';
 import type { BusinessSnapshot, BusinessWorkItem, Member } from '../types';
 import type { ProjectHomeProps } from './ProjectHome';
 import { BusinessBadge, BusinessNotice } from './BusinessComponents';
-import { businessTime, contentRevision, contentState, publicationGroup, workState } from './businessState';
-import { actionBody, currentWorkReceipt, projectContentTitle, projectMessages, workIsClosed, workRoleName } from './projectWorkspaceState';
+import { businessTime, workState } from './businessState';
+import { actionBody, currentWorkReceipt, projectContentTitle, projectMessages, workRoleName } from './projectWorkspaceState';
 import { projectWorkIssue } from './projectDailyStatus';
+import { currentProjectOutput, projectOutputDisplay } from './projectOutputDisplay';
 import { useBusinessBusy } from './useBusinessBusy';
 
 export default function ProjectConversation(props: ProjectHomeProps) {
-  const { project, bootstrap, state, onOpenContent, onRefresh, onSettings, onBusy, onShowPanel, focusId, focusNonce = 0, covered = false } = props;
+  const { project, bootstrap, state, onOpenContent, onBusy, onShowPanel, focusId, focusNonce = 0, covered = false, inspectorOpen = false } = props;
   const { busy, report } = useBusinessBusy(onBusy);
   const reportMessage = useCallback((value: boolean) => report('message', value), [report]);
-  const [error, setError] = useState('');
   const [hasNewActivity, setHasNewActivity] = useState(false);
-  const [showAllAttention, setShowAllAttention] = useState(false);
-  const pauseLock = useRef(false);
+  const [processOpen, setProcessOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const followsLatest = useRef(true);
+  const latestActivityTarget = useRef<'message' | 'output'>('output');
   const owner = bootstrap.members.find(member => member.id === project.ownerId);
   const memberName = (id?: string | null) => bootstrap.members.find(member => member.id === id)?.name || (id === 'user' ? '你' : '团队');
   const messages = useMemo(() => projectMessages(state, project.id), [state, project.id]);
-  const work = state.workItems.filter(item => item.projectId === project.id);
-  const content = state.contentItems.filter(item => item.projectId === project.id);
-  const openWork = work.filter(item => !workIsClosed(item));
-  const blocked = openWork.filter(item => projectWorkIssue(item));
-  const awaiting = content.filter(item => publicationGroup(state, item) === 'awaiting');
-  const verifying = content.filter(item => ['unknown', 'sending'].includes(publicationGroup(state, item)));
-  const entries = [
-    ...messages.map(message => ({ id: message.id, at: message.createdAt, message, work: null })),
-    ...work.map(item => ({ id: `work-${item.id}`, at: item.createdAt, message: null, work: item })),
-  ].sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
-  const activityKey = [entries.length, messages.at(-1)?.id, messages.at(-1)?.body, ...work.map(item => `${item.id}:${item.status}:${item.handoffStatus}:${item.updatedAt}`)].join('|');
-  const jumpToLatest = () => {
+  const work = state.workItems.filter(item => item.projectId === project.id)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  const featured = currentProjectOutput(state, project.id, props.selectedContentId);
+  const history = state.contentItems.filter(item => item.projectId === project.id && item.id !== featured?.item.id)
+    .sort((a, b) => (b.updatedAt || b.createdAt).localeCompare(a.updatedAt || a.createdAt))
+    .map(item => projectOutputDisplay(state, item));
+  const focusedWorkExists = work.some(item => focusId === `work-${item.id}`);
+  const focusedHistoryExists = history.some(output => focusId === `content-${output.item.id}`);
+  const focusedTargetVisible = (!focusedWorkExists || processOpen) && (!focusedHistoryExists || historyOpen);
+  const messageKey = [messages.length, messages.at(-1)?.id, messages.at(-1)?.body].join('|');
+  const outputKey = [featured?.item.id, featured?.versionId].join('|');
+  const previousActivity = useRef({ messageKey, outputKey });
+  const latestScrollTop = () => {
+    const node = scroller.current;
+    if (!node) return 0;
+    const output = node.querySelector<HTMLElement>('.team-featured-output');
+    const message = node.querySelector<HTMLElement>('.team-conversation-timeline > li:last-child .team-message');
+    const target = (latestActivityTarget.current === 'message' ? message || output : output || message)
+      || node.querySelector<HTMLElement>('.team-conversation-empty');
+    if (!target) return 0;
+    const padding = Number.parseFloat(getComputedStyle(node).paddingTop) || 0;
+    const top = node.scrollTop + target.getBoundingClientRect().top - node.getBoundingClientRect().top - padding;
+    return Math.max(0, Math.min(top, node.scrollHeight - node.clientHeight));
+  };
+  const jumpToLatest = (target: 'message' | 'output' = latestActivityTarget.current) => {
+    latestActivityTarget.current = target;
     if (!scroller.current) return;
+    scroller.current.scrollTop = latestScrollTop();
     followsLatest.current = true;
-    scroller.current.scrollTop = scroller.current.scrollHeight;
     setHasNewActivity(false);
   };
+  useLayoutEffect(() => {
+    if (previousActivity.current.outputKey !== outputKey) latestActivityTarget.current = 'output';
+    else if (previousActivity.current.messageKey !== messageKey) latestActivityTarget.current = 'message';
+    previousActivity.current = { messageKey, outputKey };
+    if (!followsLatest.current) setHasNewActivity(true);
+    else if (!covered) jumpToLatest();
+  }, [messageKey, outputKey]);
+  useLayoutEffect(() => {
+    if (!covered && followsLatest.current) jumpToLatest();
+  }, [inspectorOpen, covered]);
   useEffect(() => {
-    if (followsLatest.current) jumpToLatest();
-    else setHasNewActivity(true);
-  }, [activityKey]);
+    if (covered) return;
+    if (focusedWorkExists) setProcessOpen(true);
+    if (focusedHistoryExists) setHistoryOpen(true);
+  }, [focusId, focusNonce, covered, focusedWorkExists, focusedHistoryExists]);
   useEffect(() => {
-    if (!focusId || !scroller.current || covered) return;
-    const node = [...scroller.current.querySelectorAll<HTMLElement>('[data-project-focus]')].find(element => element.dataset.projectFocus === focusId);
-    if (!node) return;
-    followsLatest.current = false;
-    node.focus({ preventScroll: true });
-    node.scrollIntoView({ block: 'center', behavior: 'instant' });
-  }, [focusId, focusNonce, covered]);
-  const pause = async () => {
-    if (pauseLock.current) return;
-    pauseLock.current = true; report('pause', true); setError('');
-    try { await api.setProjectPaused(project.id, project.status !== 'paused'); await onRefresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '项目状态更新失败'); }
-    finally { pauseLock.current = false; report('pause', false); }
-  };
+    if (!focusId || covered || !focusedTargetVisible) return;
+    const frame = requestAnimationFrame(() => {
+      const node = [...(scroller.current?.querySelectorAll<HTMLElement>('[data-project-focus]') || [])]
+        .find(element => element.dataset.projectFocus === focusId);
+      if (!node?.getClientRects().length) return;
+      followsLatest.current = false;
+      node.focus({ preventScroll: true });
+      node.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusId, focusNonce, covered, focusedWorkExists, focusedHistoryExists, focusedTargetVisible]);
   return <section className="team-conversation" aria-label={`${project.name}的负责人会话`} data-project-id={project.id} inert={covered}>
     <header className="team-conversation-header">
-      <span className="team-channel-mark" aria-hidden="true"><Radio size={18} /></span><div className="team-project-heading"><h2>负责人通讯</h2><p>{owner?.name || '负责人'}<span className="team-heading-divider">·</span>协调团队与接续工作</p></div>
-      <div className="team-header-tools"><button className={`btn btn-secondary ${project.status === 'paused' ? 'team-resume-project' : 'btn-icon-only'}`} disabled={busy || project.status === 'archived'} aria-label={project.status === 'paused' ? '继续项目' : '暂停项目'} title={project.status === 'paused' ? '继续项目' : '暂停项目'} onClick={() => void pause()}>{project.status === 'paused' ? <><Play size={15} /><span>继续项目</span></> : <Pause size={15} />}</button>
-        <button className="btn btn-secondary btn-icon-only" aria-label="项目运行与账号设置" title="项目运行与账号设置" onClick={() => onSettings('runtime')}><Settings2 size={15} /></button></div>
+      <div className="team-project-heading"><h2>对话</h2><span>{owner?.name || '负责人'}</span></div>
+      <div className="team-header-tools"><button type="button" disabled={busy} onClick={() => onShowPanel?.('resources')}>资料</button>
+        <button type="button" disabled={busy} onClick={() => onShowPanel?.('team')}>团队</button>
+        <button type="button" disabled={busy} onClick={() => onShowPanel?.('recap')}>复盘</button></div>
     </header>
-    <div className="team-context-row"><p>对话与交接记录</p>
-      <button type="button" onClick={() => onShowPanel?.('resources')}><FolderOpen size={13} />资料</button><button type="button" onClick={() => onShowPanel?.('recap')}>复盘</button></div>
-    {error && <BusinessNotice tone="danger">{error}</BusinessNotice>}
-    {(project.waitReason || project.blockers?.length || bootstrap.workspace.paused) && <div className="team-project-condition" role="status">{bootstrap.workspace.paused ? '工作区调度已暂停，恢复后继续推进。' : project.waitReason || project.blockers?.join('；')}</div>}
-    {(awaiting.length > 0 || verifying.length > 0 || blocked.length > 0) && <section className="team-attention" aria-label="待批准与交接受阻" aria-live="polite">
-      {awaiting.length > 0 && <button className="team-approval-prompt" disabled={busy} onClick={() => onOpenContent(awaiting[0].id)}><span className="team-attention-icon"><ShieldCheck size={16} /></span><span><strong>{awaiting.length} 篇整稿可以审阅</strong><small>{projectContentTitle(state, awaiting[0].id)}</small></span><ArrowRight size={15} /></button>}
-      {verifying.map(item => <button key={item.id} className="team-pending-row" disabled={busy} onClick={() => onOpenContent(item.id)}><BusinessBadge {...contentState(state, item)} /><span>{projectContentTitle(state, item.id)}</span><ArrowRight size={12} /></button>)}
-      {(showAllAttention ? blocked : blocked.slice(0, 2)).map(item => <button key={item.id} className="team-pending-row" disabled={busy} onClick={() => props.onFocus?.(`work-${item.id}`)}><BusinessBadge {...projectWorkIssue(item)!} /><span>{item.title || item.objective}</span><small>查看原因</small></button>)}
-      {blocked.length > 2 && <button className="team-attention-more" onClick={() => setShowAllAttention(value => !value)}>{showAllAttention ? '收起列表' : `还有 ${blocked.length - 2} 项待接续处理`}</button>}
-    </section>}
     <div className="team-conversation-scroll" ref={scroller} onScroll={() => {
       const node = scroller.current;
-      if (node) followsLatest.current = node.scrollHeight - node.scrollTop - node.clientHeight < 72;
+      if (!node || covered) return;
+      // Reading older messages or expanded records stops following until the user chooses the latest content again.
+      if (followsLatest.current && Math.abs(node.scrollTop - latestScrollTop()) >= 72) followsLatest.current = false;
       if (followsLatest.current) setHasNewActivity(false);
     }}>
-      {!entries.length ? <div className="team-conversation-empty"><div className="team-owner-avatar">{(owner?.name || '团').slice(0, 1)}</div><h2>把目标交给团队</h2><p>{project.objective}</p><span>工作分配、成果与修改进展会留在这里。整稿准备好后，再由你确认发布。</span></div>
-        : <ol className="team-conversation-timeline" aria-label="团队对话与协作进度">{entries.map(entry => <li key={entry.id}>
-          {entry.message ? <article className={`team-message ${entry.message.actorId === 'user' ? 'from-user' : ''} ${focusId === entry.id ? 'is-focused' : ''}`} data-project-focus={entry.id} tabIndex={-1}>
-            <div className="team-message-byline"><span className="team-message-avatar">{memberName(entry.message.actorId).slice(0, 1)}</span><strong>{memberName(entry.message.actorId)}</strong><span>{entry.message.actorId === project.ownerId ? '负责人' : entry.message.actorId === 'user' ? '' : entry.message.label}</span><time>{businessTime(entry.message.createdAt, project.timeZone)}</time></div>
-            <div className="team-message-body">{entry.message.body}</div>
-            <div className="team-message-context">{entry.message.contentId && <button disabled={busy} onClick={() => onOpenContent(entry.message!.contentId!, entry.message!.versionId)}><FileText size={12} />{projectContentTitle(state, entry.message.contentId) || '关联整稿'}</button>}
-              {entry.message.actorId === 'user' && <span>{({ pending: '已登记，等待接手', delivered: '已送达成员', answered: '已有答复，待核对', resolved: '已有答复', superseded: '对应工作已更新' } as Record<string, string>)[entry.message.status || ''] || '已登记'}</span>}
-              {entry.message.evidenceType === 'agent_claim' && <span>成员说明</span>}</div>
-          </article> : entry.work && <WorkPhase work={entry.work} state={state} members={bootstrap.members} timeZone={project.timeZone} focused={focusId === entry.id} focusNonce={focusNonce} onOpenContent={onOpenContent} disabled={busy} />}
+      {!messages.length ? <div className="team-conversation-empty"><h2>还没有对话</h2><p>可以在下方补充要求，负责人的答复会保留在这里。</p></div>
+        : <ol className="team-conversation-timeline" aria-label="团队对话">{messages.map(message => <li key={message.id}>
+          <article className={`team-message ${message.actorId === 'user' ? 'from-user' : ''} ${focusId === message.id ? 'is-focused' : ''}`} data-project-focus={message.id} tabIndex={-1}>
+            <div className="team-message-byline"><span className="team-message-avatar">{memberName(message.actorId).slice(0, 1)}</span><strong>{memberName(message.actorId)}</strong><span>{message.actorId === project.ownerId ? '负责人' : message.actorId === 'user' ? '' : message.label}</span><time>{businessTime(message.createdAt, project.timeZone)}</time></div>
+            <div className="team-message-body">{message.body}</div>
+            <div className="team-message-context">{message.contentId && <button disabled={busy} onClick={() => onOpenContent(message.contentId!, message.versionId)}><FileText size={12} />查看关联内容</button>}
+              {message.actorId === 'user' && <span>{({ pending: '已登记，等待接手', delivered: '已送达成员', answered: '已有答复，待核对', resolved: '已有答复', superseded: '对应工作已更新' } as Record<string, string>)[message.status || ''] || '已登记'}</span>}
+              {message.evidenceType === 'agent_claim' && <span>成员说明</span>}</div>
+          </article>
         </li>)}</ol>}
-      {content.length > 0 && <section className="team-output-list" aria-label="本项目成果"><h2>稿件与成果 <span>{content.length}</span></h2>{content.map(item => {
-        const revision = contentRevision(state, item);
-        return <button key={item.id} data-project-focus={`content-${item.id}`} className={props.selectedContentId === item.id ? 'selected' : ''} disabled={busy} onClick={() => onOpenContent(item.id)}>
-          {revision?.images[0] ? <img src={api.contentImageUrl(item.id, revision.id, 0)} alt="" loading="lazy" /> : <span className="team-output-icon"><FileText size={19} /></span>}
-          <span><strong>{revision?.title || item.title}</strong><small>{revision ? `${revision.images.length} 张配图 · 版本 ${revision.revision}` : '尚未形成完整稿件'}</small></span><BusinessBadge {...contentState(state, item)} /></button>;
-      })}</section>}
+      {!inspectorOpen && (featured ? <article className="team-featured-output" aria-label="当前成果" data-content-id={featured.item.id} data-version-id={featured.versionId || undefined} data-project-focus={`content-${featured.item.id}`} tabIndex={-1}>
+        <div className="team-output-heading"><span>当前成果</span><small>{featured.revision ? `版本 ${featured.revision.revision} · ${featured.revision.images.length} 张配图${featured.frozen ? ' · 提交时版本' : ''}` : featured.frozen ? '提交时版本尚未读取' : '等待形成内容'}</small></div>
+        <div className="team-featured-preview">{featured.revision?.images[0] ? <img src={api.contentImageUrl(featured.item.id, featured.revision.id, 0)} alt="当前成果首图" loading="lazy" /> : <span className="team-featured-image-empty" aria-label="尚无可查看的配图"><FileText size={22} /></span>}
+          <div className="team-featured-copy"><h3>{featured.title}</h3><p className="team-featured-body">{featured.body}</p><button className="btn btn-secondary team-reopen-inspector" disabled={busy} onClick={() => onOpenContent(featured.item.id, featured.versionId || undefined)}>查看内容<ArrowRight size={13} /></button></div>
+        </div>
+      </article> : <div className="team-output-empty"><strong>内容准备好后会出现在这里</strong><p>{work.length ? '已有工作记录，可展开团队过程查看进度。' : '可以先补充资料或内容要求，形成完整内容后再查看。'}</p></div>)}
+      {history.length > 0 && <details className="team-output-history" open={historyOpen} onToggle={event => {
+        if (event.currentTarget.open) followsLatest.current = false;
+        setHistoryOpen(event.currentTarget.open);
+      }}>
+        <summary>历史成果 <span>{history.length}</span><ChevronDown size={14} /></summary>
+        <div>{history.map(output => <button key={output.item.id} className="team-history-row" data-project-focus={`content-${output.item.id}`} disabled={busy} onClick={() => onOpenContent(output.item.id, output.versionId || undefined)}>
+          <span><strong>{output.title}</strong><small>{output.revision ? `版本 ${output.revision.revision}${output.frozen ? ' · 提交时版本' : ''}` : output.frozen ? '提交时版本尚未读取' : '等待形成内容'}</small></span><ArrowRight size={13} />
+        </button>)}</div>
+      </details>}
+      <details className="team-process-details" open={processOpen} onToggle={event => {
+        if (event.currentTarget.open) followsLatest.current = false;
+        setProcessOpen(event.currentTarget.open);
+      }}>
+        <summary><GitBranch size={14} />查看团队过程 <span>{work.length}</span><ChevronDown size={14} /></summary>
+        {work.length ? <ol className="team-process-timeline" aria-label="团队工作记录">{work.map(item => <li key={item.id}><WorkPhase work={item} state={state} members={bootstrap.members} timeZone={project.timeZone} focused={focusId === `work-${item.id}`} focusNonce={focusNonce} onOpenContent={onOpenContent} disabled={busy} /></li>)}</ol>
+          : <p className="team-process-empty">尚未产生工作记录，实际安排与检查会保留在这里。</p>}
+      </details>
     </div>
-    {hasNewActivity && <button className="team-new-activity" onClick={jumpToLatest}><ArrowDown size={13} />有新进展，回到最新</button>}
-    <ProjectComposer {...props} onBusy={reportMessage} onSent={jumpToLatest} />
-    <div className="team-conversation-footnote"><span>{openWork.length} 项未完工作</span><span>草稿按项目自动保存</span></div>
+    {hasNewActivity && <button className="team-new-activity" onClick={() => jumpToLatest()}><ArrowDown size={13} />有新进展，回到最新</button>}
+    <ProjectComposer {...props} onBusy={reportMessage} onSent={() => jumpToLatest('message')} />
+    <div className="team-conversation-footnote">草稿按项目自动保存</div>
   </section>;
 }
 

@@ -39,6 +39,7 @@ export default function BusinessWorkspace({ view, bootstrap, state, loading, err
   const reportContent = useCallback((value: boolean) => report('content', value), [report]);
   const reportContext = useCallback((value: boolean) => report('context', value), [report]);
   const reportCreate = useCallback((value: boolean) => report('create', value), [report]);
+  const reportCommand = useCallback((value: boolean) => report('command', value), [report]);
   const explicitContent = contentId ? state.contentItems.find((item) => item.id === contentId) : null;
   const selectedId = explicitContent?.projectId || projectId;
   const project = state.projects.find((entry) => entry.id === selectedId)
@@ -70,8 +71,8 @@ export default function BusinessWorkspace({ view, bootstrap, state, loading, err
   };
   const currentContext = (): BusinessNavigation => ({ projectId: project?.id || projectId, contentId: content?.id || contentId,
     versionId: versionId || (content ? currentContentVersion(content) : null), focusId, panel: inspectorOpen ? currentPanel : 'conversation' });
-  const openSettings = (section?: 'account' | 'team' | 'runtime') => onSettings({ ...currentContext(), section });
-  const openMembers = () => onMembers(currentContext());
+  const openSettings = (section?: 'account' | 'team' | 'runtime') => { if (!busy) onSettings({ ...currentContext(), section }); };
+  const openMembers = () => { if (!busy) onMembers(currentContext()); };
   const closeCreate = () => onNavigate('projects', { projectId, contentId, versionId, focusId, panel: contentId ? 'content' : 'conversation' });
   const showPanel = (next: ProjectPanel | 'conversation') => {
     if (!project || busy) return;
@@ -99,14 +100,14 @@ export default function BusinessWorkspace({ view, bootstrap, state, loading, err
     {loading ? <div className="business-page-empty" role="status"><RefreshCw size={22} /><p>正在读取项目与内容进度</p></div>
       : view === 'publications' && !contentId ? <PublicationsView state={state} onOpenContent={openContent} onProjects={() => onNavigate('projects')} />
         : <div ref={workspacePanel} inert={creating} onFocusCapture={inspectorOverlay.rememberFocus} className={`team-workbench ${project ? '' : 'without-project'} ${inspectorOpen ? 'with-inspector' : 'without-inspector'}`}>
-          {project && <ProjectCommandStrip project={project} state={state} bootstrap={bootstrap} disabled={busy} unavailable={Boolean(error)}
-            covered={inspectorOverlay.coversIndex} inspectorOpen={inspectorOpen} onFocus={focusEntry} onOpenInspector={() => showPanel('content')}
-            onOpenContent={openContent} onSettings={openSettings} />}
+          {project && <ProjectCommandStrip key={`command-${project.id}`} project={project} state={state} bootstrap={bootstrap} disabled={busy} unavailable={Boolean(error)}
+            covered={inspectorOverlay.coversIndex} overlayOpen={inspectorOverlay.coversConversation} onFocus={focusEntry} onOpenContent={openContent} onSettings={openSettings}
+            onRefresh={onRefresh} onBusy={reportCommand} />}
           <ProjectSidebar state={state} bootstrap={bootstrap} project={project || undefined} query={query} onQuery={setQuery}
-            onCreate={onStartWork} onProject={id => onNavigate('projects', { projectId: id })} onContent={openContent} onFocus={focusEntry}
-            onResult={selectResult} onTeam={() => showPanel('team')} disabled={busy || Boolean(error)} unavailable={Boolean(error)} covered={inspectorOverlay.coversIndex} />
-          {project ? <ProjectHome key={project.id} project={project} bootstrap={bootstrap} state={state} onRefresh={onRefresh} onOpenContent={openContent}
-            onSettings={openSettings} onBusy={reportConversation} onShowPanel={showPanel} onFocus={focusEntry} focusId={focusId} focusNonce={focusNonce} selectedContentId={content?.id} covered={inspectorOverlay.coversConversation} />
+            onCreate={onStartWork} onProject={id => onNavigate('projects', { projectId: id })}
+            onResult={selectResult} disabled={busy || Boolean(error)} unavailable={Boolean(error)} covered={inspectorOverlay.coversIndex} />
+          {project ? <ProjectHome key={`conversation-${project.id}`} project={project} bootstrap={bootstrap} state={state} onRefresh={onRefresh} onOpenContent={openContent}
+            onSettings={openSettings} onBusy={reportConversation} onShowPanel={showPanel} onFocus={focusEntry} focusId={focusId} focusNonce={focusNonce} selectedContentId={content?.id} covered={inspectorOverlay.coversConversation} inspectorOpen={inspectorOpen} />
             : projectId ? <div className="business-page-empty"><h2>当前工作区没有这个项目</h2><button className="btn btn-secondary" onClick={() => onNavigate('projects')}>返回项目列表</button></div>
               : <div className="business-project-onboarding"><div className="business-onboarding-icon"><FolderOpen size={26} /></div><h1>把目标交给团队</h1><p>完成一次任务，或让团队持续运营内容。先交代你想要的结果，团队负责安排工作、检查与修改。</p>
                 <div className="business-onboarding-workflow"><span>交代目标</span><ArrowRight size={14} /><span>团队推进</span><ArrowRight size={14} /><strong>看成果，提修改</strong></div>
@@ -121,8 +122,8 @@ export default function BusinessWorkspace({ view, bootstrap, state, loading, err
               : <div className="team-context-panel" ref={contextPanel}>
                 {currentPanel === 'resources' && contextProps && <ProjectResources key={project.id} {...contextProps} />}
                 {currentPanel === 'recap' && contextProps && <ProjectRecap {...contextProps} />}
-                {currentPanel === 'team' && <><section className="business-section"><h2>项目团队与运行条件</h2><p className="business-muted">负责人负责安排、收取和接续工作。最终发布由你确认。</p><div className="team-team-detail">{project.memberIds.map(id => { const member = bootstrap.members.find(entry => entry.id === id); return <article key={id}><strong>{member?.name || '成员记录缺失'}</strong><BusinessBadge label={id === project.ownerId ? '负责人' : id === project.reviewerId ? '独立审稿' : '执行成员'} tone="neutral" /><p>{member?.enabled ? member.status === 'busy' ? '成员正在运行' : member.runtime?.status === 'ready' ? '最近运行检查可用' : '运行情况将在派工前核对' : '成员未启用'}</p></article>; })}</div><button className="btn btn-secondary" onClick={openMembers}>管理成员</button></section>
-                  <section className="business-section"><h2>发布条件</h2><p className="business-muted">{project.account?.name || project.account?.label || '项目尚未绑定发布账号'}</p><p className="business-muted">{state.connection?.reason || (state.connection?.status === 'ready' ? '连接已可用，每篇整稿仍需检查、审稿和最终批准。' : state.connection?.status === 'login_required' ? '发布账号需要登录。' : '发布连接尚未配置或尚不可用。')}</p><button className="btn btn-secondary" onClick={() => openSettings('account')}>账号与运行设置</button></section>
+                {currentPanel === 'team' && <><section className="business-section"><h2>项目团队与运行条件</h2><p className="business-muted">负责人负责安排、收取和接续工作。最终发布由你确认。</p><div className="team-team-detail">{project.memberIds.map(id => { const member = bootstrap.members.find(entry => entry.id === id); return <article key={id}><strong>{member?.name || '成员记录缺失'}</strong><BusinessBadge label={id === project.ownerId ? '负责人' : id === project.reviewerId ? '独立审稿' : '执行成员'} tone="neutral" /><p>{member?.enabled ? member.status === 'busy' ? '成员正在运行' : member.runtime?.status === 'ready' ? '最近运行检查可用' : '运行情况将在派工前核对' : '成员未启用'}</p></article>; })}</div><button className="btn btn-secondary" disabled={busy} onClick={openMembers}>管理成员</button></section>
+                  <section className="business-section"><h2>发布条件</h2><p className="business-muted">{project.account?.name || project.account?.label || '项目尚未绑定发布账号'}</p><p className="business-muted">{state.connection?.reason || (state.connection?.status === 'ready' ? '连接已可用，每篇整稿仍需检查、审稿和最终批准。' : state.connection?.status === 'login_required' ? '发布账号需要登录。' : '发布连接尚未配置或尚不可用。')}</p><button className="btn btn-secondary" disabled={busy} onClick={() => openSettings('account')}>账号与运行设置</button></section>
                   <section className="business-section"><h2>内置协作规范</h2>{state.skillCatalog.length ? state.skillCatalog.map(skill => <article key={skill.id} className="team-skill-detail"><strong>{skill.name} <small>v{skill.version}</small></strong><p>{skill.description}</p>{safeSourceUrl(skill.sourceUrl) && <a href={safeSourceUrl(skill.sourceUrl)!} target="_blank" rel="noreferrer">查看来源</a>}</article>) : <p className="business-muted">尚未读取到协作规范目录。</p>}</section>
                   <section className="business-section"><h2>周期记录</h2>{state.productionCycles.filter(cycle => cycle.projectId === project.id).map(cycle => <p key={cycle.id} className="business-muted">{cycle.dateKey || businessTime(cycle.createdAt, project.timeZone)} · {({ active: '推进中', planning: '规划中', running: '推进中', complete: '已完成', completed: '已完成', revising: '返工中', blocked: '待处理', cancelled: '已取消' } as Record<string, string>)[cycle.status] || '状态待确认'}</p>)}</section></>}
               </div>}

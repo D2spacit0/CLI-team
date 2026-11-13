@@ -10,7 +10,7 @@ import { normalizePublicationPayload } from '../server/connectors/xiaohongshu.mj
 import { childEnvironment, killChild } from '../server/safety.mjs';
 
 const projectRoot = path.resolve(import.meta.dirname, '..');
-const outputBase = path.join(projectRoot, 'work', 'workflow-simplification-20261112', 'ui-proof');
+const outputBase = path.join(projectRoot, 'work', 'workbench-focus-20261113', 'ui-proof');
 fs.mkdirSync(outputBase, { recursive: true });
 const output = fs.mkdtempSync(path.join(outputBase, 'run-'));
 const workspace = path.join(output, 'workspace');
@@ -253,6 +253,78 @@ const inspectReturnAfterScroll = async (name, label, viewSelector) => {
     `${name}: the page content must actually reach its scroll end before inspecting the return control`);
   return measurement;
 };
+const openFeaturedContent = async () => {
+  await page.locator('.team-featured-output').getByRole('button', { name: '查看内容', exact: true }).click();
+};
+const inspectFocusedDefault = async (name, title) => {
+  await settlePaint();
+  const measurement = await page.evaluate(title => {
+    const root = document.querySelector('.team-workbench');
+    const visible = element => {
+      if (!element || element.closest('[hidden],[inert],[aria-hidden="true"]') || !element.getBoundingClientRect().width ||
+          !element.getBoundingClientRect().height || getComputedStyle(element).visibility !== 'visible') return false;
+      for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+        if (ancestor.tagName === 'DETAILS' && !ancestor.open && !ancestor.querySelector(':scope > summary')?.contains(element)) return false;
+      }
+      return true;
+    };
+    const shown = selector => [...root.querySelectorAll(selector)].filter(visible);
+    const titles = [], textNodes = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (textNodes.nextNode()) {
+      const node = textNodes.currentNode, text = node.textContent.trim();
+      if (!text.includes(title) || node.parentElement.closest('.team-inspector') || !visible(node.parentElement)) continue;
+      const range = document.createRange(); range.selectNodeContents(node);
+      if (!range.getClientRects().length) continue;
+      titles.push({ text, occurrences: text.split(title).length - 1, element: node.parentElement.tagName, className: node.parentElement.className });
+    }
+    const details = selector => [...root.querySelectorAll(selector)].map(element => ({ open: element.open,
+      summary: element.querySelector(':scope > summary')?.textContent.trim(), visible: visible(element) }));
+    const scroller = root.querySelector('.team-conversation-scroll'), scrollRect = scroller.getBoundingClientRect();
+    const outputWithinScroll = selector => {
+      const element = root.querySelector(selector), rect = element?.getBoundingClientRect();
+      return { rect: rect?.toJSON(), fullyVisible: Boolean(rect && rect.width > 0 && rect.height > 0 &&
+        rect.top >= scrollRect.top && rect.bottom <= scrollRect.bottom && rect.left >= scrollRect.left && rect.right <= scrollRect.right &&
+        rect.top >= 0 && rect.bottom <= innerHeight) };
+    };
+    return { viewport: { width: innerWidth, height: innerHeight }, documentWidth: document.documentElement.scrollWidth,
+      primaryCount: shown('.team-next-step').length, primaryKind: root.querySelector('.team-next-step')?.getAttribute('data-project-state'),
+      primaryActions: shown('.team-next-step button').length, featuredCount: shown('.team-featured-output').length,
+      visiblePhases: shown('.team-work-phase').length, phaseCount: root.querySelectorAll('.team-work-phase').length,
+      titleOccurrences: titles.reduce((total, item) => total + item.occurrences, 0), titleLocations: titles,
+      otherStatuses: details('.team-other-statuses'), process: details('.team-process-details'), history: details('.team-output-history'),
+      sidebarHistoryCount: root.querySelectorAll('.team-sidebar .team-history-row').length,
+      duplicateStatusRegions: root.querySelectorAll('.team-attention,.team-project-condition,.team-approval-prompt').length,
+      featuredVisibility: { scroller: scrollRect.toJSON(), label: outputWithinScroll('.team-featured-output .team-output-heading'),
+        title: outputWithinScroll('.team-featured-output h3'),
+        button: outputWithinScroll('.team-featured-output .team-reopen-inspector') },
+      headerRunCount: document.querySelectorAll('.header-actions .runs-count-pill').length,
+      headerPauseCount: document.querySelectorAll('.header-actions button[aria-label="暂停调度"],.header-actions button[aria-label="恢复调度"]').length };
+  }, title);
+  result.focusedDefaults ||= [];
+  result.focusedDefaults.push({ name, ...measurement });
+  assert.ok(measurement.documentWidth <= measurement.viewport.width + 1, `${name}: the default workbench must not overflow horizontally`);
+  assert.equal(measurement.primaryCount, 1, `${name}: show one recommended next step`);
+  assert.equal(measurement.primaryKind, 'paused', `${name}: pause takes priority while work failure and review also exist`);
+  assert.equal(measurement.primaryActions, 1, `${name}: show one recommended action`);
+  assert.equal(measurement.featuredCount, 1, `${name}: show one current output`);
+  assert.equal(measurement.titleOccurrences, 1, `${name}: the current title must appear only once outside an opened inspector`);
+  assert.equal(measurement.visiblePhases, 0, `${name}: internal work phases are collapsed by default`);
+  assert.ok(measurement.phaseCount > 0, `${name}: phase records must still exist`);
+  assert.equal(measurement.process.length, 1);
+  assert.equal(measurement.process[0].open, false);
+  assert.equal(measurement.otherStatuses.length, 1);
+  assert.equal(measurement.otherStatuses[0].open, false);
+  assert.ok(measurement.otherStatuses[0].visible, `${name}: the other-issues disclosure itself must remain discoverable`);
+  assert.ok(measurement.history.every(entry => !entry.open));
+  assert.equal(measurement.sidebarHistoryCount, 0);
+  assert.equal(measurement.duplicateStatusRegions, 0);
+  assert.equal(measurement.headerRunCount, 0);
+  assert.equal(measurement.headerPauseCount, 0);
+  assert.equal(measurement.featuredVisibility.label.fullyVisible, true, `${name}: the current-output label must be fully visible inside the conversation`);
+  assert.equal(measurement.featuredVisibility.title.fullyVisible, true, `${name}: the current-output title must be fully visible inside the conversation`);
+  assert.equal(measurement.featuredVisibility.button.fullyVisible, true, `${name}: the open-content button must be fully visible inside the conversation`);
+  return measurement;
+};
 const createProjectFromForm = async () => {
   const [response] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/api/projects') && response.request().method() === 'POST'),
@@ -269,6 +341,10 @@ try {
   const index = fs.readFileSync(path.join(projectRoot, 'dist', 'index.html'), 'utf8');
   const assets = [...index.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)"/g)].map(match => `dist${match[1]}`);
   result.build = ['dist/index.html', ...assets].map(filename => ({ path: filename, sha256: sha256(fs.readFileSync(path.join(projectRoot, filename))) }));
+  const beforeScreenshot = 'docs/assets/simple-workflow-20261113.png';
+  if (fs.existsSync(path.join(projectRoot, beforeScreenshot))) result.comparisonReference = {
+    path: beforeScreenshot, sha256: sha256(fs.readFileSync(path.join(projectRoot, beforeScreenshot))),
+    kind: 'Prior implementation screenshot from the preceding isolated rehearsal; retained unchanged as a visual reference, not a pixel-diff baseline.' };
   const browserExecutable = findBrowser();
   const images = await renderImages();
   runtime = await startWorkbench({ root: workspace, distDir: path.join(projectRoot, 'dist'),
@@ -429,6 +505,12 @@ try {
     await createProjectFromForm();
     assert.equal(service.projects.list().length, 2);
     assert.equal(await page.locator('.team-inspector').count(), 0);
+    assert.equal(await page.locator('.team-command-strip').count(), 1,
+      'switching from the first project to a newly created project must not retain the previous command strip');
+    assert.equal(await page.locator('.team-next-step').count(), 1);
+    assert.equal(await page.locator('.team-conversation').count(), 1);
+    assert.equal(await page.locator(`.team-conversation[data-project-id="${firstProject.id}"]`).count(), 0,
+      'the previous project conversation must not remain in the DOM after switching projects');
   });
   const project = service.projects.list().find(entry => entry.id !== firstProject.id);
   assert.ok(project);
@@ -443,7 +525,7 @@ try {
   await check('the daily view starts with one truthful next step and expands the actual team process on demand', async () => {
     const disclosure = page.locator('.team-process-details');
     assert.equal(await disclosure.evaluate(element => element.open), false);
-    assert.equal(await page.locator('.team-stage-track').isVisible(), false);
+    assert.equal(await page.locator('.team-work-phase:visible').count(), 0);
     await page.locator('.team-next-step').getByText(/暂停/).first().waitFor();
     assert.equal(await page.locator('.team-next-step').getByText(/正在执行|团队正在改稿/).count(), 0,
       'paused scheduling cannot be reported as work in progress');
@@ -451,16 +533,18 @@ try {
     for (const phase of await phases.all()) assert.equal(await phase.getAttribute('aria-expanded'), 'false');
     await page.screenshot({ path: path.join(output, 'daily-project-1440.png') });
     await disclosure.locator(':scope > summary').click();
-    assert.equal(await page.locator('.team-stage-track').isVisible(), true);
+    assert.equal(await disclosure.evaluate(element => element.open), true);
+    assert.ok((await disclosure.innerText()).trim().length > (await disclosure.locator(':scope > summary').innerText()).trim().length,
+      'opening team process must reveal actual records or an explicit empty state');
     await disclosure.locator(':scope > summary').click();
-    assert.equal(await page.locator('.team-stage-track').isVisible(), false);
+    assert.equal(await page.locator('.team-work-phase:visible').count(), 0);
     const layout = await page.evaluate(() => ({ width: innerWidth, documentWidth: document.documentElement.scrollWidth,
       inspector: document.querySelectorAll('.team-inspector').length, conversation: document.querySelector('.team-conversation').getBoundingClientRect().toJSON() }));
     assert.equal(layout.inspector, 0); assert.ok(layout.documentWidth <= layout.width);
     result.dailyView = layout;
     const settingsBefore = structuredClone(service.settings());
     readOnlyNavigation = true;
-    await page.locator('.team-next-step').getByRole('button', { name: '查看运行设置', exact: true }).click();
+    await page.locator('.team-next-step').getByRole('button', { name: '查看暂停设置', exact: true }).click();
     const runtimeSection = page.getByRole('region', { name: '工作区调度', exact: true });
     await runtimeSection.waitFor();
     const runtimeFocus = await inspectRestoredFocus('paused work links to the explicit workspace scheduling control');
@@ -494,7 +578,7 @@ try {
     await saveDraft(composer, draftText);
   });
   await check('switching context keeps the conversation and persisted input draft', async () => {
-    await page.locator('.team-context-row').getByRole('button', { name: '资料', exact: true }).click();
+    await page.locator('.team-conversation-header').getByRole('button', { name: '资料', exact: true }).click();
     await page.getByLabel('补充资料', { exact: true }).waitFor();
     assert.equal(await composer.inputValue(), draftText);
     await saveDraft(page.getByLabel('补充资料', { exact: true }), '演练资料草稿：具体方法需要根据工作节奏调整。');
@@ -525,11 +609,15 @@ try {
   await check('a draft without a verified independent review is never advertised as ready for user approval', async () => {
     service.store.update('contentItems', item.id, { status: 'review' });
     service.emitChange('business.ui_fixture', { projectId: project.id });
-    await page.locator('.team-history-row').filter({ hasText: two.title }).click();
+    await page.getByLabel('搜索当前项目', { exact: true }).fill(two.title);
+    await page.locator('.team-search-results button').filter({ hasText: `${two.title} · 版本 2` }).click();
     await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
     await page.waitForFunction(() => document.querySelectorAll('.business-image-button img').length === 2 &&
       [...document.querySelectorAll('.business-image-button img')].every(image => image.complete && image.naturalWidth === 1080));
     assert.equal(await page.locator('.team-approval-prompt').count(), 0);
+    assert.equal(await page.locator('.team-other-statuses [data-project-state="awaiting"]').count(), 0,
+      'a missing independent review cannot appear among actionable secondary review states');
+    assert.notEqual(await page.locator('.team-next-step').getAttribute('data-project-state'), 'awaiting');
     await page.locator('.business-content-breadcrumb').getByText('等待独立审稿', { exact: true }).waitFor();
     assert.equal(await page.locator('.business-content-breadcrumb').getByText(/待批准整稿|可以确认发布|等待你确认整稿/).count(), 0);
     await assertApprovalUnavailable('a current draft without source-verified review cannot expose a publish action');
@@ -555,8 +643,161 @@ try {
   service.store.put('businessActions', { id: 'ui-action', projectId: project.id, sourceWorkItemId: workId, sourceRunId: 'ui-run', generation: 1,
     type: 'contribute', input: { message: '演练成员贡献：通过真实结构化行动字段展示。' }, result: {}, status: 'processed', createdAt: stamp });
   service.emitChange('business.ui_fixture', { projectId: project.id });
+  await check('focused defaults show one next step and one output while other issues and historical records remain reachable', async () => {
+    assert.equal(service.settings().paused, true);
+    assert.equal(service.store.get('workItems', workId).status, 'failed');
+    assert.equal(service.store.get('contentItems', item.id).status, 'awaiting_approval');
+    const activityProof = result.focusedMessageActivity = { source: 'Fixture contribution through BusinessCollaboration.thread, SQLite and the real /api/business/state response',
+      realAgentReply: false, contentId: item.id, versionId: two.id, events: [] };
+    const contribution = async message => {
+      const counts = ['contentItems', 'contentRevisions', 'workItems', 'publicationApprovals', 'publicationAttempts']
+        .map(table => [table, service.store.list(table).length]);
+      const refreshed = page.waitForResponse(async response => response.url().endsWith('/api/business/state') && response.ok() &&
+        (await response.json()).collaborationThreads.some(thread => thread.projectId === project.id && thread.question === message));
+      const thread = service.business.collaboration.thread({ projectId: project.id, contentId: item.id, versionId: two.id,
+        requesterId: owner.id, kind: 'contribution', question: message, status: 'resolved' });
+      const snapshot = await (await refreshed).json();
+      assert.equal(snapshot.collaborationThreads.find(entry => entry.id === thread.id)?.question, message);
+      for (const [table, count] of counts) assert.equal(service.store.list(table).length, count, `${table} must not change for a message-only update`);
+      const selector = `.team-conversation-timeline [data-project-focus="message-${thread.id}"]`;
+      await page.locator(selector).waitFor({ state: 'attached' });
+      await settlePaint();
+      assert.equal(await page.locator('.team-featured-output').getAttribute('data-version-id'), two.id);
+      return { selector, threadId: thread.id, apiObserved: true, preservedCounts: Object.fromEntries(counts) };
+    };
+    const conversationPosition = selector => page.locator(selector).evaluate(element => {
+      const node = element.closest('.team-conversation-scroll'), bounds = node.getBoundingClientRect();
+      const within = target => {
+        const rect = target.getBoundingClientRect();
+        return { rect: rect.toJSON(), fullyVisible: rect.width > 0 && rect.height > 0 && rect.top >= bounds.top && rect.bottom <= bounds.bottom &&
+          rect.left >= bounds.left && rect.right <= bounds.right && rect.top >= 0 && rect.bottom <= innerHeight };
+      };
+      return { viewport: { width: innerWidth, height: innerHeight }, scroller: bounds.toJSON(), scrollTop: node.scrollTop,
+        maximum: node.scrollHeight - node.clientHeight, target: within(element), body: within(element.querySelector('.team-message-body') || element),
+        latestMessageId: node.querySelector('.team-conversation-timeline > li:last-child .team-message')?.getAttribute('data-project-focus') };
+    });
+    await page.getByRole('button', { name: '收起稿件面板', exact: true }).click();
+    await page.locator(`.team-featured-output[data-content-id="${item.id}"]`).waitFor();
+    for (const size of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(size);
+      await page.reload();
+      await page.locator(`.team-featured-output[data-content-id="${item.id}"]`).waitFor();
+      await page.locator('.team-other-statuses li[data-project-state="awaiting"]').waitFor({ state: 'attached' });
+      await page.waitForFunction(() => [...document.querySelectorAll('.team-featured-output img')].every(image => image.complete && image.naturalWidth === 1080));
+      const measurement = await inspectFocusedDefault(`daily-focused-${size.width}`, two.title);
+      assert.match(measurement.otherStatuses[0].summary, /其他待处理\s*2/);
+      await inspectVisuals(`daily-focused-${size.width}`, ['.team-workbench', '.team-conversation', '.team-featured-output'], { primaryRequired: true });
+      await page.screenshot({ path: path.join(output, `daily-focused-${size.width}.png`) });
+    }
+    const followed = await contribution('新回复演练：稿件版本保持不变，负责人补充了适用范围。');
+    const automatic = await conversationPosition(followed.selector);
+    activityProof.events.push({ name: 'same-version-auto-follow-390', ...followed, ...automatic });
+    assert.equal(automatic.viewport.width, 390);
+    assert.equal(automatic.latestMessageId, `message-${followed.threadId}`);
+    assert.equal(automatic.body.fullyVisible, true, 'a new reply on the same manuscript version must be visible when following latest activity');
+    assert.equal(await page.locator('.team-new-activity').count(), 0);
+    await page.screenshot({ path: path.join(output, 'same-version-auto-follow-390.png') });
+    await page.locator(followed.selector).getByRole('button', { name: '查看关联内容', exact: true }).click();
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    await page.getByRole('button', { name: '收起稿件面板', exact: true }).click();
+    await page.locator('.team-featured-output').waitFor();
+    await settlePaint();
+    const afterInspector = await conversationPosition(followed.selector);
+    activityProof.events.push({ name: 'same-version-close-inspector-390', ...afterInspector });
+    assert.equal(afterInspector.body.fullyVisible, true, 'closing the manuscript must return to the latest reply without scrolling past it');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const otherStatuses = page.locator('.team-other-statuses');
+    assert.equal(await otherStatuses.locator('li[data-project-state="blocked"]').isVisible(), false);
+    assert.equal(await otherStatuses.locator('li[data-project-state="awaiting"]').isVisible(), false);
+    await otherStatuses.locator(':scope > summary').click();
+    const blockedStatus = otherStatuses.locator('li[data-project-state="blocked"]');
+    const awaitingStatus = otherStatuses.locator('li[data-project-state="awaiting"]');
+    await blockedStatus.getByText('1 项工作需要处理', { exact: true }).waitFor();
+    await awaitingStatus.getByText('1 篇整稿可以审阅', { exact: true }).waitFor();
+    await blockedStatus.getByRole('button').click();
+    const focusedWork = page.locator(`[data-project-focus="work-${workId}"].is-focused`);
+    await focusedWork.getByText('演练受阻：尚缺少可核对的真实使用案例。', { exact: true }).waitFor();
+    assert.equal(await page.locator('.team-process-details').evaluate(element => element.open), true,
+      'selecting a blocked work item must reveal the collapsed team records');
+    assert.equal(await focusedWork.locator('.team-phase-toggle').getAttribute('aria-expanded'), 'true');
+    await awaitingStatus.getByRole('button').click();
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    assert.equal(await page.locator('.team-featured-output').count(), 0,
+      'an opened manuscript must not be duplicated in the conversation');
+    await assertApprovalUnavailable('the secondary review action must not bypass desktop approval');
+    await page.getByRole('button', { name: '收起稿件面板', exact: true }).click();
+    const historicalItem = service.contentRevisions.createItem(project.id, { title: '历史入口演练：每周复盘提纲' });
+    const historicalVersion = service.contentRevisions.createRevision(historicalItem.id, { title: historicalItem.title,
+      body: '这份本地演练草稿只验证历史入口。保留上一份稿件并按需打开，不运行成员或发布。', tags: ['界面演练'],
+      images: two.images.map(image => ({ assetId: image.id })), sources: two.sources, inputRefs: two.inputRefs,
+      authorMemberIds: [owner.id] });
+    service.emitChange('business.ui_fixture', { projectId: project.id });
+    const history = page.locator('.team-output-history');
+    await history.waitFor();
+    assert.equal(await history.evaluate(element => element.open), false, 'additional manuscripts enter a collapsed history');
+    await history.locator(':scope > summary').click();
+    const historicalRow = history.locator('.team-history-row').filter({ hasText: historicalItem.title });
+    await historicalRow.waitFor();
+    assert.equal(await history.getByText(two.title, { exact: true }).count(), 0,
+      'the featured manuscript must not be duplicated among historical cards');
+    await historicalRow.click();
+    await page.locator(`[data-content-workbench="${historicalItem.id}"]`).waitFor();
+    await page.waitForFunction(expected => document.querySelector('[aria-label="查看稿件版本"]')?.value === expected, historicalVersion.id);
+    await page.getByLabel('搜索当前项目', { exact: true }).fill(two.title);
+    await page.locator('.team-search-results button').filter({ hasText: `${two.title} · 版本 2` }).click();
+    await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
+    await page.getByRole('button', { name: '收起稿件面板', exact: true }).click();
+    await page.reload();
+    await page.locator(`.team-featured-output[data-content-id="${item.id}"]`).waitFor();
+    await inspectFocusedDefault('daily-focused-with-history-1440', two.title);
+    assert.equal(await composer.inputValue(), draftText);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.locator(`.team-featured-output[data-content-id="${item.id}"]`).waitFor();
+    await history.locator(':scope > summary').click();
+    await historicalRow.scrollIntoViewIfNeeded();
+    await settlePaint();
+    const historicalSelector = `.team-output-history [data-project-focus="content-${historicalItem.id}"]`;
+    const readingBefore = await conversationPosition(historicalSelector);
+    assert.equal(readingBefore.target.fullyVisible, true, 'the history row must be on screen before the reply arrives');
+    const deferred = await contribution('历史阅读演练：这是同一稿件的新回复，请读完历史后再查看。');
+    const activityButton = page.getByRole('button', { name: '有新进展，回到最新', exact: true });
+    await activityButton.waitFor();
+    await settlePaint();
+    const readingAfter = await conversationPosition(historicalSelector);
+    const deferredPosition = await conversationPosition(deferred.selector);
+    const prompt = await activityButton.evaluate(element => {
+      const rect = element.getBoundingClientRect(), hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return { rect: rect.toJSON(), fullyVisible: rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth,
+        acceptsClick: Boolean(hit && element.contains(hit)) };
+    });
+    activityProof.events.push({ name: 'same-version-history-preserved-390', ...deferred, readingBefore, readingAfter, deferredPosition, prompt });
+    assert.equal(await history.evaluate(element => element.open), true);
+    assert.equal(readingAfter.target.fullyVisible, true, 'incoming replies must preserve the visible history being read');
+    assert.ok(Math.abs(readingAfter.target.rect.top - readingBefore.target.rect.top) <= 2,
+      'new replies may adjust browser scroll anchoring but must not move the historical reading position');
+    assert.equal(deferredPosition.body.fullyVisible, false, 'reading history must not jump to the new reply before the user chooses it');
+    assert.equal(prompt.fullyVisible, true); assert.equal(prompt.acceptsClick, true);
+    await page.screenshot({ path: path.join(output, 'same-version-history-preserved-390.png') });
+    await activityButton.click();
+    await activityButton.waitFor({ state: 'detached' });
+    await settlePaint();
+    const returned = await conversationPosition(deferred.selector);
+    activityProof.events.push({ name: 'same-version-return-to-latest-390', ...returned });
+    assert.equal(returned.latestMessageId, `message-${deferred.threadId}`);
+    assert.equal(returned.body.fullyVisible, true, 'return to latest must reveal the newest reply instead of skipping to the manuscript');
+    assert.equal(await page.locator('.team-featured-output').getAttribute('data-version-id'), two.id);
+    await page.screenshot({ path: path.join(output, 'same-version-return-to-latest-390.png') });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.reload();
+    await page.locator(`.team-featured-output[data-content-id="${item.id}"]`).waitFor();
+    result.focusedRecordAccess = { primary: 'paused', secondary: ['blocked', 'awaiting'], workId,
+      secondaryWorkOpenedProcess: true, secondaryReviewOpenedManuscript: true, hiddenDuplicateManuscript: true,
+      historicalContentId: historicalItem.id, historicalVersionId: historicalVersion.id, historicalCardOpenedVersion: true,
+      currentRecoveredThroughSearch: true, conversationDraftPreserved: true };
+  });
   await check('real ordered PNGs, fixed manuscript, version routing and disabled browser approval', async () => {
-    await page.locator('.team-history-row').filter({ hasText: two.title }).click();
+    await openFeaturedContent();
     await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
     await page.waitForFunction(() => document.querySelectorAll('.business-image-button img').length === 2 && [...document.querySelectorAll('.business-image-button img')].every(image => image.complete && image.naturalWidth === 1080));
     assert.equal(await composer.inputValue(), draftText);
@@ -580,9 +821,12 @@ try {
     await page.getByRole('tab', { name: '检查与审稿', exact: true }).click();
     await page.locator('[data-evidence="agent"]').getByText('独立审稿通过', { exact: true }).waitFor();
     await page.getByRole('tab', { name: '协作与材料', exact: true }).click();
-    await page.locator('.business-collaboration-list').getByText('演练成员贡献：通过真实结构化行动字段展示。', { exact: true }).waitFor();
-    await page.locator('.business-collaboration-list').getByText('演练负责人', { exact: true }).waitFor();
-    await page.locator('.business-collaboration-list').getByText('行动已登记，成果另行验收', { exact: true }).waitFor();
+    const originalContribution = page.locator('.business-collaboration-list > li').filter({
+      has: page.getByText('演练成员贡献：通过真实结构化行动字段展示。', { exact: true }) });
+    await originalContribution.waitFor();
+    assert.equal(await originalContribution.count(), 1);
+    await originalContribution.getByText('演练负责人', { exact: true }).waitFor();
+    await originalContribution.getByText('行动已登记，成果另行验收', { exact: true }).waitFor();
     await page.getByRole('tab', { name: '检查与审稿', exact: true }).click();
     await page.screenshot({ path: path.join(output, 'workbench-1440.png') });
     assert.equal(await page.locator('#root').evaluate(element => element.inert), false);
@@ -766,7 +1010,7 @@ try {
     assert.equal(await page.locator('.team-process-details').evaluate(element => element.open), false);
     await inspectVisuals('daily-workbench-1440', ['.team-workbench', '.team-sidebar', '.team-conversation'], { primaryRequired: true });
     await page.screenshot({ path: path.join(output, 'daily-workbench-1440.png') });
-    await page.getByRole('button', { name: '查看整稿', exact: true }).click();
+    await openFeaturedContent();
     await page.locator(`[data-content-workbench="${item.id}"]`).waitFor();
   });
   await check('project search locates exact messages, handoff details and historical versions', async () => {
@@ -777,6 +1021,8 @@ try {
     await search.fill('演练交接记录');
     await page.locator('.team-search-results button').filter({ hasText: '演练返工' }).click();
     await page.locator('.team-work-phase.is-focused .team-handoff-history').getByText('演练交接记录：缺少场景证据，退回补充。', { exact: true }).waitFor();
+    assert.equal(await page.locator('.team-process-details').evaluate(element => element.open), true,
+      'searching a work handoff must expand its detailed records');
     await search.fill('演练旧版本关键词');
     await page.locator('.team-search-results button').filter({ hasText: '版本 1' }).click();
     await page.waitForFunction(expected => document.querySelector('[aria-label="查看稿件版本"]')?.value === expected, one.id);
@@ -785,12 +1031,16 @@ try {
     await page.getByRole('button', { name: '查看最新整稿', exact: true }).click();
   });
   await check('folded failures remain visible with separate program receipt details', async () => {
+    const process = page.locator('.team-process-details');
+    if (!await process.evaluate(element => element.open)) await process.locator(':scope > summary').click();
     const phase = page.locator(`[data-project-focus="work-${workId}"]`);
     const toggle = phase.locator('.team-phase-toggle');
     if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click();
     assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
     await phase.getByText('演练受阻：尚缺少可核对的真实使用案例。', { exact: true }).waitFor();
-    await page.locator('.team-attention').getByText('演练返工：补充适用边界', { exact: true }).waitFor();
+    const otherStatuses = page.locator('.team-other-statuses');
+    if (!await otherStatuses.evaluate(element => element.open)) await otherStatuses.locator(':scope > summary').click();
+    await otherStatuses.getByText('1 项工作需要处理', { exact: true }).waitFor();
     await toggle.click();
     await phase.locator('.team-receipt summary').click();
     await phase.getByText('工作输入与约定版本一致', { exact: true }).waitFor();
@@ -800,9 +1050,22 @@ try {
     await inspectReducedMotion();
   });
   await check('responsive layouts keep manuscript accessible without horizontal overflow', async () => {
+    const projectOptions = page.locator('.team-project-options');
     for (const size of [{ width: 1024, height: 850 }, { width: 768, height: 1024 }, { width: 390, height: 844 }]) {
+      if (size.width === 768) {
+        assert.equal(await projectOptions.evaluate(element => element.open), false);
+        await projectOptions.locator(':scope > summary').click();
+        await projectOptions.getByRole('group', { name: '项目选项', exact: true }).waitFor();
+        assert.equal(await projectOptions.evaluate(element => element.open), true);
+      }
       await page.setViewportSize(size);
       await settlePaint();
+      if (size.width === 768) {
+        await page.waitForFunction(() => document.querySelector('.team-project-options')?.open === false);
+        assert.equal(await projectOptions.getByRole('group', { name: '项目选项', exact: true }).isVisible(), false,
+          'a desktop project menu must close when the manuscript becomes a covering narrow panel');
+        result.projectOptionsCoverage = { openedAtWidth: 1024, closedAtWidth: 768, menuHiddenWhileInspectorCovers: true };
+      }
       const layout = await page.evaluate(() => ({ width: innerWidth, document: document.documentElement.scrollWidth,
         inspector: document.querySelector('.team-inspector').getBoundingClientRect().width }));
       result.layouts.push({ name: `project-${size.width}`, ...layout });
@@ -849,7 +1112,7 @@ try {
         assert.equal(await page.locator('.team-inspector').count(), 0);
         await inspectVisuals('conversation-390', ['.team-workbench', '.team-conversation'], { primaryRequired: true });
         await page.screenshot({ path: path.join(output, 'conversation-390.png') });
-        await page.getByRole('button', { name: '查看整稿', exact: true }).click();
+        await openFeaturedContent();
       }
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -893,22 +1156,23 @@ try {
     await navigateTab('待发布');
     await row.waitFor(); await row.scrollIntoViewIfNeeded();
     result.publicationNavigation = { viewportWidth: page.viewportSize().width, roundTrip: ['projects', 'publications', 'projects', 'publications'] };
+    assert.equal(await page.locator('.header-actions .runs-count-pill').count(), 0);
+    assert.equal(await page.locator('.header-actions button[aria-label="恢复调度"],.header-actions button[aria-label="暂停调度"]').count(), 0);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await row.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(output, 'publication-unknown.png') });
     await row.click();
     await page.getByText('这篇稿件可能已经提交，结果待核实。', { exact: true }).waitFor();
+    assert.equal(await page.locator('.team-next-step').getAttribute('data-project-state'), 'unknown',
+      'an unresolved publication must take priority over paused work and other failures');
     await assertApprovalUnavailable('an uncertain submission cannot expose a publish action');
     assert.equal(await page.getByRole('button', { name: /重新发布|重发|重试发布/ }).count(), 0);
     await page.getByRole('button', { name: '回读核实', exact: true }).waitFor();
   });
   await check('changing publication scope selects the returned version and retains review and approval gates', async () => {
-    const scheduledItem = service.contentRevisions.createItem(project.id, { title: '流程演练：调整排期后直接看新版本' });
-    const scheduledVersion = service.contentRevisions.createRevision(scheduledItem.id, {
-      title: scheduledItem.title, body: '本条仅验证排期修改后的版本定位，不运行成员，也不进行发布。', tags: ['流程演练'],
-      images: two.images.map(image => ({ assetId: image.id })), sources: two.sources, inputRefs: two.inputRefs, authorMemberIds: [owner.id],
-    });
-    service.emitChange('business.ui_fixture', { projectId: project.id });
+    const scheduledItem = service.store.get('contentItems', result.focusedRecordAccess.historicalContentId);
+    const scheduledVersion = service.store.get('contentRevisions', result.focusedRecordAccess.historicalVersionId);
+    assert.ok(scheduledItem && scheduledVersion, 'reuse the unapproved historical draft within the existing project content limit');
     await page.goto(`${runtime.url}/#/projects/${project.id}?content=${scheduledItem.id}&version=${scheduledVersion.id}`);
     await page.locator(`[data-content-workbench="${scheduledItem.id}"]`).waitFor();
     await page.getByRole('button', { name: '调整发布时间与范围', exact: true }).click();
@@ -929,7 +1193,7 @@ try {
     await assertApprovalUnavailable('scope updates still require checks, review and native approval');
     assert.equal(service.store.list('publicationApprovals').some(approval => approval.contentId === scheduledItem.id), false);
     result.scheduleRoundTrip = { contentId: scheduledItem.id, previousVersion: scheduledVersion.id, currentVersion: next.id,
-      selectedReturnedVersion: true, createdApproval: false };
+      selectedReturnedVersion: true, createdApproval: false, reusedHistoricalDraft: true };
     await page.screenshot({ path: path.join(output, 'schedule-new-version-1440.png') });
   });
   await check('existing room and task deep links still open', async () => {
@@ -980,7 +1244,7 @@ try {
   assert.equal(service.settings().paused, true);
   assert.deepEqual(service.store.list('publicationApprovals').map(entry => entry.id), ['ui-approval']);
   assert.deepEqual(service.store.list('publicationAttempts').map(entry => entry.id), ['ui-publication-attempt']);
-  assert.equal(result.checks.length, 16, 'all ten existing interactions and six simplified-flow checks must finish');
+  assert.equal(result.checks.length, 17, 'all sixteen existing interactions and the focused-default check must finish');
   result.buildUnchanged = result.build.every(entry => sha256(fs.readFileSync(path.join(projectRoot, entry.path))) === entry.sha256);
   assert.equal(result.buildUnchanged, true, 'the compiled UI changed during verification');
   result.isolation = { workspaceRoot: service.root, executorCalls, runCount: service.store.list('runs').length,
